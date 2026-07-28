@@ -1,0 +1,20 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Sample logs fetched from the pm4py repo
+examples/data/
+
+# Models and images written by `pmx discover` / `pmx dfg` runs
+*.pnml
+*.bpmn
+*.png
+*.svg
+!dashboard/*.svg

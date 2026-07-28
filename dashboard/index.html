@@ -1,0 +1,1065 @@
+<title>Process Log Explorer</title>
+<style>
+/* ── tokens ─────────────────────────────────────────────────────────────── */
+:root {
+  color-scheme: light;
+  --plane:      #EEF2F0;
+  --surface:    #FAFCFB;
+  --sunken:     #E4EAE7;
+  --ink:        #0C1A16;
+  --ink-2:      #48605A;
+  --ink-3:      #7A908A;
+  --rule:       #D5DFDB;
+  --hairline:   #E3EAE7;
+  --pine:       #017E5D;
+  --ochre:      #8A5000;
+  --pine-wash:  rgba(1,126,93,0.10);
+  --ochre-wash: rgba(138,80,0,0.10);
+  --focus:      #017E5D;
+  --shadow:     0 1px 2px rgba(12,26,22,.05), 0 8px 24px -16px rgba(12,26,22,.30);
+
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --sans:  system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono:  ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --step--1: 0.78rem;
+  --step-0:  0.93rem;
+  --step-1:  1.15rem;
+  --step-2:  1.55rem;
+  --step-3:  2.1rem;
+  --step-4:  2.9rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --plane:      #0A100F;
+    --surface:    #111917;
+    --sunken:     #18221F;
+    --ink:        #EAF2EF;
+    --ink-2:      #A2B5B0;
+    --ink-3:      #748781;
+    --rule:       #24312D;
+    --hairline:   #1C2724;
+    --pine:       #1DA97F;
+    --ochre:      #BE831C;
+    --pine-wash:  rgba(29,169,127,0.14);
+    --ochre-wash: rgba(190,131,28,0.14);
+    --focus:      #1DA97F;
+    --shadow:     0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --plane:      #0A100F;
+  --surface:    #111917;
+  --sunken:     #18221F;
+  --ink:        #EAF2EF;
+  --ink-2:      #A2B5B0;
+  --ink-3:      #748781;
+  --rule:       #24312D;
+  --hairline:   #1C2724;
+  --pine:       #1DA97F;
+  --ochre:      #BE831C;
+  --pine-wash:  rgba(29,169,127,0.14);
+  --ochre-wash: rgba(190,131,28,0.14);
+  --focus:      #1DA97F;
+  --shadow:     0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+}
+:root[data-theme="light"] { color-scheme: light; }
+
+/* ── base ───────────────────────────────────────────────────────────────── */
+body {
+  background: var(--plane);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: var(--step-0);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1080px; margin: 0 auto; padding: 2.6rem 1.25rem 4rem; }
+:where(a) { color: var(--pine); text-underline-offset: 2px; }
+:where(button, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 3px;
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ── header ─────────────────────────────────────────────────────────────── */
+.masthead { display: flex; flex-direction: column; gap: .5rem; margin-bottom: 1.6rem; }
+.eyebrow {
+  font-family: var(--mono); font-size: var(--step--1); letter-spacing: .13em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+h1 {
+  font-family: var(--serif); font-size: var(--step-4); font-weight: 600;
+  letter-spacing: -.02em; line-height: 1.02; text-wrap: balance; margin: 0;
+}
+.standfirst { color: var(--ink-2); max-width: 62ch; font-size: var(--step-1); }
+
+/* ── filter row (scopes everything below) ───────────────────────────────── */
+.filters {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: .9rem;
+  padding: .95rem 1.1rem; margin-bottom: 1.5rem;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.field { display: flex; flex-direction: column; gap: .3rem; }
+.field > label {
+  font-family: var(--mono); font-size: var(--step--1); letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+select, .btn {
+  font-family: var(--sans); font-size: var(--step-0); color: var(--ink);
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 7px; padding: .44rem .7rem; cursor: pointer;
+}
+select:hover, .btn:hover { border-color: var(--pine); }
+.btn[aria-pressed="true"] { background: var(--pine-wash); border-color: var(--pine); color: var(--pine); }
+.filters .spacer { flex: 1 1 auto; }
+.src {
+  font-family: var(--mono); font-size: var(--step--1); color: var(--ink-3);
+  align-self: flex-end; text-align: right;
+}
+
+/* ── paste panel ────────────────────────────────────────────────────────── */
+.paste { margin-bottom: 1.5rem; }
+.paste[hidden] { display: none; }
+.paste-inner {
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 10px;
+  padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: .7rem;
+}
+textarea {
+  font-family: var(--mono); font-size: var(--step--1); line-height: 1.5;
+  width: 100%; min-height: 120px; resize: vertical;
+  color: var(--ink); background: var(--sunken);
+  border: 1px solid var(--rule); border-radius: 7px; padding: .7rem .8rem;
+}
+.paste-actions { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+.msg { font-size: var(--step--1); }
+.msg.err { color: #C0392B; }
+:root[data-theme="dark"] .msg.err, :root:where(:not([data-theme="light"])) .msg.err { color: #E88B7D; }
+.msg.ok { color: var(--pine); }
+
+/* ── KPI strip ──────────────────────────────────────────────────────────── */
+.kpis {
+  display: grid; gap: 1px; background: var(--rule);
+  border: 1px solid var(--rule); border-radius: 10px; overflow: hidden;
+  grid-template-columns: repeat(6, 1fr); margin-bottom: 1.5rem;
+  box-shadow: var(--shadow);
+}
+@media (max-width: 860px) { .kpis { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 520px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+.kpi { background: var(--surface); padding: .85rem .9rem 1rem; display: flex; flex-direction: column; gap: .18rem; }
+.kpi dt {
+  font-family: var(--mono); font-size: var(--step--1); letter-spacing: .08em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.kpi dd { margin: 0; font-size: var(--step-3); font-weight: 600; letter-spacing: -.02em; line-height: 1.05; }
+.kpi .sub { font-size: var(--step--1); color: var(--ink-2); }
+
+/* ── cards ──────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 10px; padding: 1.15rem 1.25rem 1.35rem; margin-bottom: 1.5rem;
+  box-shadow: var(--shadow);
+}
+.card-head { display: flex; align-items: baseline; gap: .8rem; flex-wrap: wrap; margin-bottom: .25rem; }
+.card h2 { font-size: var(--step-2); font-weight: 600; letter-spacing: -.015em; margin: 0; }
+.card .note { color: var(--ink-2); font-size: var(--step--1); max-width: 68ch; margin: .1rem 0 1rem; }
+.card-head .spacer { flex: 1 1 auto; }
+.toggle {
+  font-family: var(--mono); font-size: var(--step--1); letter-spacing: .06em;
+  text-transform: uppercase; background: none; border: 1px solid var(--rule);
+  border-radius: 999px; padding: .22rem .7rem; color: var(--ink-2); cursor: pointer;
+}
+.toggle[aria-pressed="true"] { background: var(--pine-wash); border-color: var(--pine); color: var(--pine); }
+
+/* ── legend ─────────────────────────────────────────────────────────────── */
+.legend { display: flex; gap: 1.1rem; flex-wrap: wrap; font-size: var(--step--1); color: var(--ink-2); margin-bottom: .9rem; }
+.legend span { display: inline-flex; align-items: center; gap: .4rem; }
+.swatch { width: 11px; height: 11px; border-radius: 2px; flex: none; }
+.swatch.line { height: 3px; width: 16px; border-radius: 2px; }
+
+/* ── variant runs (the hero) ────────────────────────────────────────────── */
+.run-head {
+  display: grid;
+  grid-template-columns: 2.2rem minmax(6rem, 1fr) 5.4rem 4.6rem 4.6rem 4.6rem;
+  gap: .75rem; align-items: end; padding: 0 .4rem .4rem;
+  font-family: var(--mono); font-size: var(--step--1); letter-spacing: .07em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.run-head .r { text-align: right; }
+@media (max-width: 720px) {
+  .run-head { grid-template-columns: 1.8rem minmax(4rem, 1fr) 4.6rem 4rem; }
+  .run-head > :nth-child(6) { display: none; }
+}
+.runs { display: flex; flex-direction: column; gap: 1px; background: var(--hairline); border-top: 1px solid var(--hairline); }
+.run { background: var(--surface); padding: .65rem .4rem .7rem; }
+.run:hover, .run:focus-visible { background: var(--pine-wash); }
+
+/* line 1: the numbers, in aligned columns so they scan vertically */
+.run-top {
+  display: grid;
+  grid-template-columns: 2.2rem minmax(6rem, 1fr) 5.4rem 4.6rem 4.6rem 4.6rem;
+  gap: .75rem; align-items: center;
+}
+@media (max-width: 720px) {
+  .run-top { grid-template-columns: 1.8rem minmax(4rem, 1fr) 4.6rem 4rem; }
+  .run-top .steps, .run-top .num:first-of-type { display: none; }
+}
+.run .rank { font-family: var(--mono); font-size: var(--step--1); color: var(--ink-3); text-align: right; font-variant-numeric: tabular-nums; }
+.sharebar-track { height: 11px; background: var(--sunken); border-radius: 3px; }
+.sharebar { height: 11px; background: var(--pine); border-radius: 3px; min-width: 2px; }
+.run .num  { font-family: var(--mono); font-size: var(--step--1); font-variant-numeric: tabular-nums; color: var(--ink); text-align: right; }
+.run .cum  { font-family: var(--mono); font-size: var(--step--1); font-variant-numeric: tabular-nums; color: var(--ochre); text-align: right; }
+.run .steps{ font-family: var(--mono); font-size: var(--step--1); font-variant-numeric: tabular-nums; color: var(--ink-3); text-align: right; }
+
+/* line 2: the path itself, full text, wrapping — never truncated */
+.chain {
+  display: flex; align-items: center; flex-wrap: wrap; gap: .22rem .1rem;
+  margin: .45rem 0 0 2.95rem; min-width: 0;
+}
+@media (max-width: 720px) { .chain { margin-left: 0; } }
+.step {
+  font-family: var(--mono); font-size: var(--step--1); line-height: 1.35;
+  background: var(--sunken); border: 1px solid var(--hairline);
+  border-radius: 4px; padding: .05rem .38rem; overflow-wrap: anywhere;
+}
+.run.top .step { border-color: var(--pine); background: var(--pine-wash); color: var(--pine); }
+.arrow { color: var(--ink-3); font-size: .68rem; padding: 0 .2rem; flex: none; }
+
+/* ── coverage meter ─────────────────────────────────────────────────────── */
+.coverage { margin: .2rem 0 1.2rem; }
+.covtrack { height: 26px; background: var(--sunken); border-radius: 5px; display: flex; overflow: hidden; gap: 2px; }
+.covfill { background: var(--pine); }
+.covrest { background: var(--sunken); border-left: 2px solid var(--surface); flex: 1 1 auto; }
+.covlabel { display: flex; justify-content: space-between; gap: 1rem; font-size: var(--step--1); color: var(--ink-2); margin-top: .4rem; }
+.covlabel b { color: var(--ink); font-weight: 600; }
+
+/* ── bar chart ──────────────────────────────────────────────────────────── */
+.bars { display: flex; flex-direction: column; gap: 2px; }
+.bar-row { display: grid; grid-template-columns: minmax(9rem, 15rem) 1fr 4rem; gap: .7rem; align-items: center; padding: .18rem 0; position: relative; }
+@media (max-width: 620px) { .bar-row { grid-template-columns: minmax(7rem, 10rem) 1fr 3.2rem; } }
+.bar-row:hover .bar-fill { filter: brightness(1.12); }
+.bar-label { font-family: var(--mono); font-size: var(--step--1); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { height: 14px; display: flex; }
+.bar-fill { background: var(--pine); border-radius: 0 4px 4px 0; min-width: 2px; }
+.bar-fill.alt { background: var(--ochre); }
+.bar-val { font-family: var(--mono); font-size: var(--step--1); font-variant-numeric: tabular-nums; color: var(--ink-2); text-align: right; }
+
+/* ── two-up ─────────────────────────────────────────────────────────────── */
+.two-up { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+@media (max-width: 780px) { .two-up { grid-template-columns: 1fr; } }
+.two-up .card { margin-bottom: 0; }
+
+/* ── endpoints ──────────────────────────────────────────────────────────── */
+.ends { display: flex; flex-direction: column; gap: 1.1rem; }
+.ends h3 {
+  font-family: var(--mono); font-size: var(--step--1); letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-3); font-weight: 500; margin: 0 0 .5rem;
+}
+
+/* ── mined-model panel ──────────────────────────────────────────────────── */
+.modelbox {
+  border: 1px solid var(--rule); border-radius: 8px; background: var(--sunken);
+  overflow-x: auto; padding: .9rem; color: var(--ink);
+}
+.modelbox svg { max-width: none; height: auto; display: block; }
+.modelbox.fit svg { max-width: 100%; }
+.model-empty {
+  border: 1px dashed var(--rule); border-radius: 8px; padding: 1.6rem 1.2rem;
+  text-align: center; color: var(--ink-2); background: var(--sunken);
+}
+.model-empty pre { text-align: left; margin: .8rem auto 0; max-width: 46rem; }
+.model-actions { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; margin-bottom: .8rem; }
+.model-actions .grow { flex: 1 1 auto; }
+
+/* ── transitions ────────────────────────────────────────────────────────── */
+.provenance {
+  display: inline-flex; align-items: center; gap: .35rem;
+  font-family: var(--mono); font-size: var(--step--1); letter-spacing: .05em;
+  text-transform: uppercase; border: 1px solid var(--pine); color: var(--pine);
+  background: var(--pine-wash); border-radius: 999px; padding: .1rem .55rem;
+}
+.provenance.approx { border-color: var(--ochre); color: var(--ochre); background: var(--ochre-wash); }
+.edge-label { display: flex; align-items: center; gap: .3rem; min-width: 0; }
+.edge-label .a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.edge-label .arrow { flex: none; }
+.loop { font-style: normal; color: var(--ochre); flex: none; }
+
+/* ── tables (the table-view twin) ───────────────────────────────────────── */
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: var(--step--1); }
+th, td { text-align: left; padding: .38rem .6rem; border-bottom: 1px solid var(--hairline); }
+th { font-family: var(--mono); font-size: var(--step--1); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; }
+td.n, th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+td.seq { font-family: var(--mono); }
+[hidden] { display: none !important; }
+
+/* ── tooltip ────────────────────────────────────────────────────────────── */
+#tip {
+  position: fixed; z-index: 50; pointer-events: none; opacity: 0;
+  background: var(--ink); color: var(--surface);
+  font-size: var(--step--1); line-height: 1.45;
+  padding: .45rem .6rem; border-radius: 6px; max-width: 30rem;
+  box-shadow: 0 6px 18px -6px rgba(0,0,0,.5); transition: opacity .1s;
+}
+#tip.on { opacity: 1; }
+#tip .t-name { font-family: var(--mono); display: block; margin-bottom: .15rem; }
+#tip .t-val { font-weight: 600; }
+
+/* ── footer ─────────────────────────────────────────────────────────────── */
+footer { margin-top: 2.4rem; padding-top: 1.4rem; border-top: 1px solid var(--rule); color: var(--ink-2); font-size: var(--step--1); }
+footer h3 { font-size: var(--step-0); margin: 0 0 .5rem; color: var(--ink); }
+pre {
+  font-family: var(--mono); font-size: var(--step--1); background: var(--sunken);
+  border: 1px solid var(--hairline); border-radius: 7px; padding: .7rem .85rem;
+  overflow-x: auto; margin: .5rem 0 1rem;
+}
+footer p { max-width: 70ch; }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">pmx inspect &rarr; dashboard</p>
+    <h1>Process Log Explorer</h1>
+    <p class="standfirst">Every case in an event log follows some path. A handful of those paths
+    account for most of the work; the rest is the long tail where exceptions live. This reads the
+    JSON from <code style="font-family:var(--mono)">pmx inspect --json</code> and shows you which is which.</p>
+  </header>
+
+  <!-- one filter row, scoping everything below it -->
+  <div class="filters">
+    <div class="field">
+      <label for="ds">Event log</label>
+      <select id="ds"></select>
+    </div>
+    <div class="field">
+      <label for="topn">Paths shown</label>
+      <select id="topn">
+        <option value="5">Top 5</option>
+        <option value="10" selected>Top 10</option>
+        <option value="15">Top 15</option>
+        <option value="25">All loaded</option>
+      </select>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn" id="pastebtn" aria-pressed="false" aria-controls="paste">Load your own&hellip;</button>
+    <p class="src" id="src"></p>
+  </div>
+
+  <section class="paste" id="paste" hidden>
+    <div class="paste-inner">
+      <label for="json" style="font-size:var(--step--1);color:var(--ink-2)">
+        Run <code style="font-family:var(--mono)">pmx inspect YOUR_LOG.xes --json -n 25</code> and paste the output here.
+      </label>
+      <textarea id="json" spellcheck="false" placeholder='{"source":"...","events":8577,"cases":1434,...}'></textarea>
+      <div class="paste-actions">
+        <button class="btn" id="load">Render this log</button>
+        <button class="btn" id="clear">Clear</button>
+        <span class="msg" id="msg"></span>
+      </div>
+    </div>
+  </section>
+
+  <dl class="kpis" id="kpis"></dl>
+
+  <!-- HERO: variant runs -->
+  <section class="card">
+    <div class="card-head">
+      <h2>How cases actually flow</h2>
+      <div class="spacer"></div>
+      <button class="toggle" id="t-runs" aria-pressed="false">Table</button>
+    </div>
+    <p class="note" id="runs-note"></p>
+
+    <div class="coverage" id="coverage"></div>
+
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--pine)"></i> Bar &amp; share: cases on this exact path</span>
+      <span><i class="swatch" style="background:var(--ochre)"></i> Running: this path plus every path above it</span>
+    </div>
+
+    <div id="runs-chart">
+      <div class="run-head" aria-hidden="true">
+        <div></div><div>Share of all cases</div><div class="r">Cases</div>
+        <div class="r">Share</div><div class="r">Running</div><div class="r">Length</div>
+      </div>
+      <div class="runs" id="runs"></div>
+    </div>
+    <div id="runs-table" class="tablewrap" hidden></div>
+  </section>
+
+  <!-- the mined model, rendered by pmx/Graphviz and pasted in -->
+  <section class="card">
+    <div class="card-head">
+      <h2>The mined model</h2>
+      <div class="spacer"></div>
+      <button class="toggle" id="fitbtn" aria-pressed="true">Fit width</button>
+    </div>
+    <p class="note">The model <code style="font-family:var(--mono)">pmx discover</code> actually mined
+    &mdash; a real Petri net or BPMN, gateways and all. Paste the SVG it renders and it lands here,
+    recoloured for whichever theme you are reading in.</p>
+
+    <div class="model-actions">
+      <button class="btn" id="modelbtn" aria-pressed="false" aria-controls="modelpaste">Paste model SVG&hellip;</button>
+      <button class="btn" id="modelclear" hidden>Remove</button>
+      <span class="grow"></span>
+      <span class="msg" id="modelmsg"></span>
+    </div>
+
+    <div id="modelpaste" hidden style="margin-bottom:.9rem">
+      <textarea id="svgin" spellcheck="false" placeholder="&lt;svg width=&quot;...&quot; viewBox=&quot;...&quot;&gt; ... &lt;/svg&gt;"></textarea>
+      <div class="paste-actions" style="margin-top:.6rem">
+        <button class="btn" id="svgload">Render this model</button>
+      </div>
+    </div>
+
+    <div class="model-empty" id="model-empty">
+      <p style="margin:0">No model pasted yet. Render one, then copy the file in:</p>
+<pre>pmx discover YOUR_LOG.xes --notation bpmn -o model.bpmn \
+  -i model.svg --bgcolor transparent
+pbcopy &lt; model.svg</pre>
+      <p style="margin:.6rem 0 0;font-size:var(--step--1)">
+        <code style="font-family:var(--mono)">--bgcolor transparent</code> is what lets it sit on
+        this page in either theme. Needs Graphviz.</p>
+    </div>
+    <div class="modelbox fit" id="modelbox" hidden></div>
+  </section>
+
+  <!-- exact directly-follows counts, from `pmx dfg` -->
+  <section class="card" id="edges-card">
+    <div class="card-head">
+      <h2>Transitions</h2>
+      <span class="provenance" id="edges-prov">exact &middot; whole log</span>
+      <div class="spacer"></div>
+      <button class="toggle" id="t-edges" aria-pressed="false">Table</button>
+    </div>
+    <p class="note" id="edges-note"></p>
+    <div id="edges-chart"><div class="bars" id="edges"></div></div>
+    <div id="edges-table" class="tablewrap" hidden></div>
+  </section>
+
+  <div class="two-up">
+    <!-- activity frequency -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Activity volume</h2>
+        <div class="spacer"></div>
+        <button class="toggle" id="t-acts" aria-pressed="false">Table</button>
+      </div>
+      <p class="note">How often each step appears across every case. One colour: these are names, not a ranking.</p>
+      <div id="acts-chart"><div class="bars" id="acts"></div></div>
+      <div id="acts-table" class="tablewrap" hidden></div>
+    </section>
+
+    <!-- entry / exit -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Where cases enter and leave</h2>
+        <div class="spacer"></div>
+        <button class="toggle" id="t-ends" aria-pressed="false">Table</button>
+      </div>
+      <p class="note">One start activity is a clean, well-scoped log. Many end activities usually means
+      real alternate outcomes &mdash; cancellations, rejections &mdash; or data that was cut off mid-flight.</p>
+      <div id="ends-chart">
+        <div class="legend">
+          <span><i class="swatch" style="background:var(--pine)"></i> First event in a case</span>
+          <span><i class="swatch" style="background:var(--ochre)"></i> Last event in a case</span>
+        </div>
+        <div class="ends">
+          <div><h3>Starts</h3><div class="bars" id="starts"></div></div>
+          <div><h3>Ends</h3><div class="bars" id="ends"></div></div>
+        </div>
+      </div>
+      <div id="ends-table" class="tablewrap" hidden></div>
+    </section>
+  </div>
+
+  <footer>
+    <h3>Getting your own data in</h3>
+    <p>This page reads the exact JSON that <code style="font-family:var(--mono)">pmx inspect</code> emits &mdash; no
+    conversion step. <code style="font-family:var(--mono)">-n 25</code> controls how many paths travel with it.</p>
+<pre>pmx inspect examples/data/receipt.xes --json -n 25 | pbcopy</pre>
+    <p>Then hit <b>Load your own</b> above and paste. Nothing leaves the page &mdash; it runs entirely
+    in your browser, so a log you cannot upload anywhere is still fine to look at here.</p>
+    <p style="margin-top:1rem;color:var(--ink-3)">Coverage figures count only the paths present in the
+    JSON. With <code style="font-family:var(--mono)">-n 25</code> on a log of 116 paths, the remaining
+    91 are real cases that simply are not itemised &mdash; which is why the meter below the fold never
+    claims to reach 100%.</p>
+  </footer>
+</div>
+
+<div id="tip" role="status" aria-live="polite"></div>
+
+<script>
+const DFGS = {"receipt":{"edges":[{"from":"T04 Determine confirmation of receipt","to":"T05 Print and send confirmation of receipt","count":1177},{"from":"T06 Determine necessity of stop advice","to":"T10 Determine necessity to stop indication","count":1165},{"from":"T02 Check confirmation of receipt","to":"T04 Determine confirmation of receipt","count":1119},{"from":"Confirmation of receipt","to":"T02 Check confirmation of receipt","count":1079},{"from":"T05 Print and send confirmation of receipt","to":"T06 Determine necessity of stop advice","count":791},{"from":"Confirmation of receipt","to":"T06 Determine necessity of stop advice","count":239},{"from":"T02 Check confirmation of receipt","to":"T06 Determine necessity of stop advice","count":178},{"from":"T10 Determine necessity to stop indication","to":"T02 Check confirmation of receipt","count":155},{"from":"T10 Determine necessity to stop indication","to":"T04 Determine confirmation of receipt","count":141},{"from":"T04 Determine confirmation of receipt","to":"T06 Determine necessity of stop advice","count":103},{"from":"T10 Determine necessity to stop indication","to":"T05 Print and send confirmation of receipt","count":102},{"from":"T05 Print and send confirmation of receipt","to":"T10 Determine necessity to stop indication","count":86},{"from":"T06 Determine necessity of stop advice","to":"T02 Check confirmation of receipt","count":75},{"from":"T03 Adjust confirmation of receipt","to":"T02 Check confirmation of receipt","count":51},{"from":"T02 Check confirmation of receipt","to":"T03 Adjust confirmation of receipt","count":43},{"from":"T06 Determine necessity of stop advice","to":"T04 Determine confirmation of receipt","count":43},{"from":"T11 Create document X request unlicensed","to":"T12 Check document X request unlicensed","count":39},{"from":"T06 Determine necessity of stop advice","to":"T07-1 Draft intern advice aspect 1","count":38},{"from":"T12 Check document X request unlicensed","to":"T14 Determine document X request unlicensed","count":38},{"from":"T14 Determine document X request unlicensed","to":"T15 Print document X request unlicensed","count":38},{"from":"T07-1 Draft intern advice aspect 1","to":"T06 Determine necessity of stop advice","count":34},{"from":"T10 Determine necessity to stop indication","to":"T11 Create document X request unlicensed","count":34},{"from":"T07-2 Draft intern advice aspect 2","to":"T06 Determine necessity of stop advice","count":22},{"from":"T06 Determine necessity of stop advice","to":"T07-5 Draft intern advice aspect 5","count":21},{"from":"T07-5 Draft intern advice aspect 5","to":"T06 Determine necessity of stop advice","count":21},{"from":"T16 Report reasons to hold request","to":"T17 Check report Y to stop indication","count":20},{"from":"T17 Check report Y to stop indication","to":"T19 Determine report Y to stop indication","count":20},{"from":"T19 Determine report Y to stop indication","to":"T20 Print report Y to stop indication","count":20},{"from":"T10 Determine necessity to stop indication","to":"T16 Report reasons to hold request","count":19},{"from":"T06 Determine necessity of stop advice","to":"T07-2 Draft intern advice aspect 2","count":18},{"from":"T04 Determine confirmation of receipt","to":"T10 Determine necessity to stop indication","count":17},{"from":"T06 Determine necessity of stop advice","to":"T05 Print and send confirmation of receipt","count":16},{"from":"T02 Check confirmation of receipt","to":"T10 Determine necessity to stop indication","count":15},{"from":"T05 Print and send confirmation of receipt","to":"T11 Create document X request unlicensed","count":10},{"from":"T06 Determine necessity of stop advice","to":"T08 Draft and send request for advice","count":8},{"from":"T08 Draft and send request for advice","to":"T09-3 Process or receive external advice from party 3","count":8},{"from":"T04 Determine confirmation of receipt","to":"T03 Adjust confirmation of receipt","count":6},{"from":"T06 Determine necessity of stop advice","to":"T06 Determine necessity of stop advice","count":6},{"from":"T17 Check report Y to stop indication","to":"T18 Adjust report Y to stop indicition","count":6},{"from":"T18 Adjust report Y to stop indicition","to":"T17 Check report Y to stop indication","count":6}],"activities":{"Confirmation of receipt":1434,"T06 Determine necessity of stop advice":1416,"T02 Check confirmation of receipt":1368,"T04 Determine confirmation of receipt":1307,"T05 Print and send confirmation of receipt":1300,"T10 Determine necessity to stop indication":1283,"T03 Adjust confirmation of receipt":55,"T07-1 Draft intern advice aspect 1":45,"T11 Create document X request unlicensed":44,"T12 Check document X request unlicensed":41,"T14 Determine document X request unlicensed":39,"T15 Print document X request unlicensed":39,"T07-2 Draft intern advice aspect 2":32,"T07-5 Draft intern advice aspect 5":27,"T17 Check report Y to stop indication":26,"T16 Report reasons to hold request":20,"T19 Determine report Y to stop indication":20,"T20 Print report Y to stop indication":20,"T08 Draft and send request for advice":18,"T07-3 Draft intern advice hold for aspect 3":8,"T09-3 Process or receive external advice from party 3":8,"T09-1 Process or receive external advice from party 1":7,"T07-4 Draft internal advice to hold for type 4":6,"T18 Adjust report Y to stop indicition":6,"T09-4 Process or receive external advice from party 4":5,"T13 Adjust document X request unlicensed":2,"T09-2 Process or receive external advice from party 2":1},"start_activities":{"Confirmation of receipt":1434},"end_activities":{"T10 Determine necessity to stop indication":828,"T05 Print and send confirmation of receipt":400,"Confirmation of receipt":116,"T15 Print document X request unlicensed":39,"T06 Determine necessity of stop advice":16,"T20 Print report Y to stop indication":15,"T02 Check confirmation of receipt":8,"T11 Create document X request unlicensed":4,"T03 Adjust confirmation of receipt":2,"T04 Determine confirmation of receipt":2,"T07-1 Draft intern advice aspect 1":1,"T07-2 Draft intern advice aspect 2":1,"T07-5 Draft intern advice aspect 5":1,"T13 Adjust document X request unlicensed":1},"edge_total":99},"helpdesk":{"edges":[{"from":"Resolve ticket","to":"Closed","count":4558},{"from":"Assign seriousness","to":"Take in charge ticket","count":4160},{"from":"Take in charge ticket","to":"Resolve ticket","count":3563},{"from":"Take in charge ticket","to":"Wait","count":1265},{"from":"Wait","to":"Resolve ticket","count":773},{"from":"Wait","to":"Take in charge ticket","count":558},{"from":"Assign seriousness","to":"Assign seriousness","count":439},{"from":"Assign seriousness","to":"Resolve ticket","count":258},{"from":"Resolve ticket","to":"Resolve ticket","count":254},{"from":"Resolve ticket","to":"Take in charge ticket","count":154},{"from":"Wait","to":"Wait","count":113},{"from":"Insert ticket","to":"Assign seriousness","count":111},{"from":"Take in charge ticket","to":"Take in charge ticket","count":99},{"from":"Require upgrade","to":"Resolve ticket","count":82},{"from":"Take in charge ticket","to":"Require upgrade","count":72},{"from":"Assign seriousness","to":"Wait","count":69},{"from":"Take in charge ticket","to":"Create SW anomaly","count":53},{"from":"Create SW anomaly","to":"Resolve ticket","count":42},{"from":"Require upgrade","to":"Require upgrade","count":16},{"from":"Closed","to":"Closed","count":14},{"from":"Create SW anomaly","to":"Require upgrade","count":11},{"from":"Assign seriousness","to":"Require upgrade","count":8},{"from":"Require upgrade","to":"Wait","count":8},{"from":"Create SW anomaly","to":"Resolve SW anomaly","count":7},{"from":"Wait","to":"Require upgrade","count":7},{"from":"Require upgrade","to":"Take in charge ticket","count":6},{"from":"Resolve SW anomaly","to":"Resolve SW anomaly","count":5},{"from":"Take in charge ticket","to":"Schedule intervention","count":5},{"from":"Assign seriousness","to":"Create SW anomaly","count":4},{"from":"Create SW anomaly","to":"Create SW anomaly","count":4},{"from":"Insert ticket","to":"Wait","count":4},{"from":"Resolve SW anomaly","to":"Require upgrade","count":4},{"from":"Resolve SW anomaly","to":"Resolve ticket","count":4},{"from":"Schedule intervention","to":"Resolve ticket","count":4},{"from":"Create SW anomaly","to":"Take in charge ticket","count":3},{"from":"Insert ticket","to":"Take in charge ticket","count":3},{"from":"Require upgrade","to":"Create SW anomaly","count":3},{"from":"Resolve ticket","to":"Wait","count":3},{"from":"Closed","to":"Take in charge ticket","count":2},{"from":"RESOLVED","to":"INVALID","count":2}],"activities":{"Take in charge ticket":5060,"Resolve ticket":4983,"Assign seriousness":4938,"Closed":4574,"Wait":1463,"Require upgrade":119,"Insert ticket":118,"Create SW anomaly":67,"Resolve SW anomaly":13,"Schedule intervention":5,"VERIFIED":3,"INVALID":2,"RESOLVED":2,"DUPLICATE":1},"start_activities":{"Assign seriousness":4384,"Insert ticket":118,"Take in charge ticket":74,"Resolve ticket":2,"Create SW anomaly":1,"Wait":1},"end_activities":{"Closed":4557,"Resolve ticket":10,"Wait":8,"Require upgrade":3,"Take in charge ticket":1,"VERIFIED":1},"edge_total":55},"roadfines":{"edges":[{"from":"Create Fine","to":"Send Fine","count":77},{"from":"Send Fine","to":"Insert Fine Notification","count":56},{"from":"Insert Fine Notification","to":"Add penalty","count":52},{"from":"Add penalty","to":"Send for Credit Collection","count":36},{"from":"Create Fine","to":"Payment","count":23},{"from":"Add penalty","to":"Payment","count":20},{"from":"Payment","to":"Payment","count":5},{"from":"Send Fine","to":"Payment","count":5},{"from":"Insert Fine Notification","to":"Payment","count":4},{"from":"Payment","to":"Add penalty","count":4},{"from":"Add penalty","to":"Send Appeal to Prefecture","count":1},{"from":"Insert Date Appeal to Prefecture","to":"Add penalty","count":1},{"from":"Insert Fine Notification","to":"Insert Date Appeal to Prefecture","count":1},{"from":"Notify Result Appeal to Offender","to":"Payment","count":1},{"from":"Payment","to":"Insert Fine Notification","count":1},{"from":"Payment","to":"Send Fine","count":1},{"from":"Receive Result Appeal from Prefecture","to":"Notify Result Appeal to Offender","count":1},{"from":"Send Appeal to Prefecture","to":"Receive Result Appeal from Prefecture","count":1}],"activities":{"Create Fine":100,"Send Fine":78,"Payment":58,"Add penalty":57,"Insert Fine Notification":57,"Send for Credit Collection":36,"Insert Date Appeal to Prefecture":1,"Notify Result Appeal to Offender":1,"Receive Result Appeal from Prefecture":1,"Send Appeal to Prefecture":1},"start_activities":{"Create Fine":100},"end_activities":{"Payment":47,"Send for Credit Collection":36,"Send Fine":17},"edge_total":18},"running":{"edges":[{"from":"check ticket","to":"decide","count":6},{"from":"examine casually","to":"check ticket","count":4},{"from":"decide","to":"pay compensation","count":3},{"from":"decide","to":"reinitiate request","count":3},{"from":"decide","to":"reject request","count":3},{"from":"register request","to":"examine casually","count":3},{"from":"check ticket","to":"examine casually","count":2},{"from":"examine casually","to":"decide","count":2},{"from":"examine thoroughly","to":"check ticket","count":2},{"from":"register request","to":"check ticket","count":2},{"from":"check ticket","to":"examine thoroughly","count":1},{"from":"examine thoroughly","to":"decide","count":1},{"from":"register request","to":"examine thoroughly","count":1},{"from":"reinitiate request","to":"check ticket","count":1},{"from":"reinitiate request","to":"examine casually","count":1},{"from":"reinitiate request","to":"examine thoroughly","count":1}],"activities":{"check ticket":9,"decide":9,"examine casually":6,"register request":6,"examine thoroughly":3,"pay compensation":3,"reinitiate request":3,"reject request":3},"start_activities":{"register request":6},"end_activities":{"pay compensation":3,"reject request":3},"edge_total":16}};
+const DATASETS = {"receipt":{"source":"examples/data/receipt.xes","events":8577,"cases":1434,"activities":27,"variants":116,"first_event":"2010-10-02T09:20:39.266000+00:00","last_event":"2012-01-23T15:42:54.644000+00:00","top_activities":{"Confirmation of receipt":1434,"T06 Determine necessity of stop advice":1416,"T02 Check confirmation of receipt":1368,"T04 Determine confirmation of receipt":1307,"T05 Print and send confirmation of receipt":1300,"T10 Determine necessity to stop indication":1283,"T03 Adjust confirmation of receipt":55,"T07-1 Draft intern advice aspect 1":45,"T11 Create document X request unlicensed":44,"T12 Check document X request unlicensed":41,"T14 Determine document X request unlicensed":39,"T15 Print document X request unlicensed":39,"T07-2 Draft intern advice aspect 2":32,"T07-5 Draft intern advice aspect 5":27,"T17 Check report Y to stop indication":26,"T16 Report reasons to hold request":20,"T19 Determine report Y to stop indication":20,"T20 Print report Y to stop indication":20,"T08 Draft and send request for advice":18,"T07-3 Draft intern advice hold for aspect 3":8,"T09-3 Process or receive external advice from party 3":8,"T09-1 Process or receive external advice from party 1":7,"T07-4 Draft internal advice to hold for type 4":6,"T18 Adjust report Y to stop indicition":6,"T09-4 Process or receive external advice from party 4":5},"start_activities":{"Confirmation of receipt":1434},"end_activities":{"T10 Determine necessity to stop indication":828,"T05 Print and send confirmation of receipt":400,"Confirmation of receipt":116,"T15 Print document X request unlicensed":39,"T06 Determine necessity of stop advice":16,"T20 Print report Y to stop indication":15,"T02 Check confirmation of receipt":8,"T11 Create document X request unlicensed":4,"T03 Adjust confirmation of receipt":2,"T04 Determine confirmation of receipt":2,"T07-1 Draft intern advice aspect 1":1,"T07-2 Draft intern advice aspect 2":1,"T07-5 Draft intern advice aspect 5":1,"T13 Adjust document X request unlicensed":1},"top_variants":{"Confirmation of receipt -> T02 Check confirmation of receipt -> T04 Determine confirmation of receipt -> T05 Print and send confirmation of receipt -> T06 Determine necessity of stop advice -> T10 Determine necessity to stop indication":713,"Confirmation of receipt -> T06 Determine necessity of stop advice -> T10 Determine necessity to stop indication -> T02 Check confirmation of receipt -> T04 Determine confirmation of receipt -> T05 Print and send confirmation of receipt":123,"Confirmation of receipt":116,"Confirmation of receipt -> T02 Check confirmation of receipt -> T06 Determine necessity of stop advice -> T10 Determine necessity to stop indication -> T04 Determine confirmation of receipt -> T05 Print and send confirmation of receipt":115,"Confirmation of receipt -> T02 Check confirmation of receipt -> T04 Determine confirmation of receipt -> T06 Determine necessity of stop advice -> T10 Determine necessity to stop indication -> T05 Print and send confirmation of receipt":75,"Confirmation of receipt -> T06 Determine necessity of stop advice -> T02 Check confirmation of receipt -> T04 Determine confirmation of receipt -> T05 Print and send confirmation of receipt -> T10 Determine necessity to stop indication":40,"Confirmation of receipt -> T02 Check confirmation of receipt -> T06 Determine necessity of stop advice -> T04 Determine confirmation of receipt -> T05 Print and send confirmation of receipt -> T10 Determine necessity to stop indication":28,"Confirmation of receipt -> T02 Check confirmation of receipt -> T04 Determine confirmation of receipt -> T05 Print and send confirmation of receipt -> T06 Determine necessity of stop advice -> T10 Determine necessity to stop indication -> T11 Create document X request unlicensed -> T12 Check document X request unlicensed -> T14 Determine document X request unlicensed -> T15 Print document X request unlicensed":25,"Confirmation of receipt -> T06 Determine necessity of stop advice -> T02 Check confirmation of receipt -> T10 Determine necessity to stop indication -> T04 Determine confirmation of receipt -> T05 Print and send confirmation of receipt":13,"Confirmation of receipt -> T02 Check confirmation of receipt -> T04 Determine confirmation of receipt -> T05 Print and send confirmation of receipt -> T06 Determine necessity of stop advice":12,"Confirmation of receipt -> T02 Check confirmation of receipt -> T04 Determine confirmation of receipt -> T06 Determine necessity of stop advice -> T05 Print and send confirmation of receipt -> T10 Determine necessity to stop indication":12,"Confirmation of receipt -> T02 Check confirmation of receipt -> T04 Determine confirmation of receipt -> T05 Print and send confirmation of receipt -> T06 Determine necessity of stop advice -> T10 Determine necessity to stop indication -> T16 Report reasons to hold request -> T17 Check report Y to stop indication -> T19 Determine report Y to stop indication -> T20 Print report Y to stop indication":10,"Confirmation of receipt -> T02 Check confirmation of receipt -> T06 Determine necessity of stop advice -> T04 Determine confirmation of receipt -> T10 Determine necessity to stop indication -> T05 Print and send confirmation of receipt":10,"Confirmation of receipt -> T06 Determine necessity of stop advice -> T10 Determine necessity to stop indication -> T02 Check confirmation of receipt -> T03 Adjust confirmation of receipt -> T02 Check confirmation of receipt -> T04 Determine confirmation of receipt -> T05 Print and send confirmation of receipt":8,"Confirmation of receipt -> T02 Check confirmation of receipt -> T04 Determine confirmation of receipt -> T05 Print and send confirmation of receipt":7,"Confirmation of receipt -> T02 Check confirmation of receipt -> T03 Adjust confirmation of receipt -> T02 Check confirmation of receipt -> T04 Determine confirmation of receipt -> T05 Print and send confirmation of receipt -> T06 Determine necessity of stop advice -> T10 Determine necessity to stop indication":6,"Confirmation of receipt -> T06 Determine necessity of stop advice -> T02 Check confirmation of receipt -> T04 Determine confirmation of receipt -> T10 Determine necessity to stop indication -> T05 Print and send confirmation of receipt":6,"Confirmation of receipt -> T06 Determine necessity of stop advice -> T02 Check confirmation of receipt":4,"Confirmation of receipt -> T02 Check confirmation of receipt -> T06 Determine necessity of stop advice -> T10 Determine necessity to stop indication -> T04 Determine confirmation of receipt -> T05 Print and send confirmation of receipt -> T11 Create document X request unlicensed -> T12 Check document X request unlicensed -> T14 Determine document X request unlicensed -> T15 Print document X request unlicensed":3,"Confirmation of receipt -> T02 Check confirmation of receipt -> T03 Adjust confirmation of receipt -> T02 Check confirmation of receipt":2,"Confirmation of receipt -> T02 Check confirmation of receipt -> T04 Determine confirmation of receipt -> T05 Print and send confirmation of receipt -> T06 Determine necessity of stop advice -> T07-1 Draft intern advice aspect 1 -> T06 Determine necessity of stop advice -> T10 Determine necessity to stop indication":2,"Confirmation of receipt -> T02 Check confirmation of receipt -> T04 Determine confirmation of receipt -> T06 Determine necessity of stop advice -> T07-1 Draft intern advice aspect 1 -> T06 Determine necessity of stop advice -> T10 Determine necessity to stop indication -> T05 Print and send confirmation of receipt":2,"Confirmation of receipt -> T02 Check confirmation of receipt -> T04 Determine confirmation of receipt -> T06 Determine necessity of stop advice -> T10 Determine necessity to stop indication -> T05 Print and send confirmation of receipt -> T11 Create document X request unlicensed":2,"Confirmation of receipt -> T02 Check confirmation of receipt -> T04 Determine confirmation of receipt -> T06 Determine necessity of stop advice -> T10 Determine necessity to stop indication -> T16 Report reasons to hold request -> T17 Check report Y to stop indication -> T19 Determine report Y to stop indication -> T20 Print report Y to stop indication -> T05 Print and send confirmation of receipt":2,"Confirmation of receipt -> T02 Check confirmation of receipt -> T06 Determine necessity of stop advice":2},"label":"receipt.xes","blurb":"Dutch municipality building permits"},"helpdesk":{"source":"examples/data/helpdesk.xes.gz","events":21348,"cases":4580,"activities":14,"variants":226,"first_event":"2010-01-13T08:40:25+00:00","last_event":"2014-01-03T13:20:58+00:00","top_activities":{"Take in charge ticket":5060,"Resolve ticket":4983,"Assign seriousness":4938,"Closed":4574,"Wait":1463,"Require upgrade":119,"Insert ticket":118,"Create SW anomaly":67,"Resolve SW anomaly":13,"Schedule intervention":5,"VERIFIED":3,"INVALID":2,"RESOLVED":2,"DUPLICATE":1},"start_activities":{"Assign seriousness":4384,"Insert ticket":118,"Take in charge ticket":74,"Resolve ticket":2,"Create SW anomaly":1,"Wait":1},"end_activities":{"Closed":4557,"Resolve ticket":10,"Wait":8,"Require upgrade":3,"Take in charge ticket":1,"VERIFIED":1},"top_variants":{"Assign seriousness -> Take in charge ticket -> Resolve ticket -> Closed":2366,"Assign seriousness -> Take in charge ticket -> Wait -> Resolve ticket -> Closed":552,"Assign seriousness -> Take in charge ticket -> Wait -> Take in charge ticket -> Resolve ticket -> Closed":228,"Assign seriousness -> Assign seriousness -> Take in charge ticket -> Resolve ticket -> Closed":213,"Assign seriousness -> Resolve ticket -> Closed":164,"Assign seriousness -> Take in charge ticket -> Resolve ticket -> Resolve ticket -> Closed":109,"Insert ticket -> Assign seriousness -> Take in charge ticket -> Resolve ticket -> Closed":69,"Assign seriousness -> Resolve ticket -> Resolve ticket -> Closed":62,"Assign seriousness -> Take in charge ticket -> Resolve ticket -> Take in charge ticket -> Resolve ticket -> Closed":48,"Assign seriousness -> Take in charge ticket -> Require upgrade -> Resolve ticket -> Closed":40,"Take in charge ticket -> Resolve ticket -> Closed":37,"Assign seriousness -> Take in charge ticket -> Take in charge ticket -> Resolve ticket -> Closed":36,"Assign seriousness -> Assign seriousness -> Take in charge ticket -> Wait -> Take in charge ticket -> Resolve ticket -> Closed":35,"Assign seriousness -> Take in charge ticket -> Wait -> Wait -> Resolve ticket -> Closed":28,"Assign seriousness -> Take in charge ticket -> Wait -> Take in charge ticket -> Wait -> Resolve ticket -> Closed":27,"Assign seriousness -> Assign seriousness -> Take in charge ticket -> Wait -> Resolve ticket -> Closed":21,"Assign seriousness -> Take in charge ticket -> Wait -> Wait -> Take in charge ticket -> Resolve ticket -> Closed":21,"Take in charge ticket -> Wait -> Resolve ticket -> Closed":21,"Assign seriousness -> Take in charge ticket -> Create SW anomaly -> Resolve ticket -> Closed":20,"Assign seriousness -> Take in charge ticket -> Resolve ticket -> Take in charge ticket -> Wait -> Take in charge ticket -> Resolve ticket -> Closed":19,"Assign seriousness -> Assign seriousness -> Resolve ticket -> Closed":18,"Assign seriousness -> Take in charge ticket -> Wait -> Take in charge ticket -> Wait -> Take in charge ticket -> Resolve ticket -> Closed":17,"Assign seriousness -> Assign seriousness -> Assign seriousness -> Take in charge ticket -> Resolve ticket -> Closed":16,"Assign seriousness -> Wait -> Take in charge ticket -> Resolve ticket -> Closed":15,"Assign seriousness -> Wait -> Resolve ticket -> Closed":14},"label":"helpdesk.xes.gz","blurb":"Italian software helpdesk tickets"},"roadfines":{"source":"examples/data/roadtraffic100traces.xes","events":390,"cases":100,"activities":10,"variants":10,"first_event":"2000-03-15T00:00:00+00:00","last_event":"2013-04-24T00:00:00+00:00","top_activities":{"Create Fine":100,"Send Fine":78,"Payment":58,"Add penalty":57,"Insert Fine Notification":57,"Send for Credit Collection":36,"Insert Date Appeal to Prefecture":1,"Notify Result Appeal to Offender":1,"Receive Result Appeal from Prefecture":1,"Send Appeal to Prefecture":1},"start_activities":{"Create Fine":100},"end_activities":{"Payment":47,"Send for Credit Collection":36,"Send Fine":17},"top_variants":{"Create Fine -> Send Fine -> Insert Fine Notification -> Add penalty -> Send for Credit Collection":36,"Create Fine -> Payment":22,"Create Fine -> Send Fine":16,"Create Fine -> Send Fine -> Insert Fine Notification -> Add penalty -> Payment":10,"Create Fine -> Send Fine -> Insert Fine Notification -> Add penalty -> Payment -> Payment":5,"Create Fine -> Send Fine -> Insert Fine Notification -> Payment -> Add penalty -> Payment":4,"Create Fine -> Send Fine -> Payment":4,"Create Fine -> Payment -> Send Fine":1,"Create Fine -> Send Fine -> Insert Fine Notification -> Insert Date Appeal to Prefecture -> Add penalty -> Send Appeal to Prefecture -> Receive Result Appeal from Prefecture -> Notify Result Appeal to Offender -> Payment":1,"Create Fine -> Send Fine -> Payment -> Insert Fine Notification -> Add penalty -> Payment":1},"label":"roadtraffic100traces.xes","blurb":"Italian road-traffic fine collection"},"running":{"source":"examples/data/running-example.xes","events":42,"cases":6,"activities":8,"variants":6,"first_event":"2010-12-30T11:02:00+00:00","last_event":"2011-01-24T14:56:00+00:00","top_activities":{"check ticket":9,"decide":9,"examine casually":6,"register request":6,"examine thoroughly":3,"pay compensation":3,"reinitiate request":3,"reject request":3},"start_activities":{"register request":6},"end_activities":{"pay compensation":3,"reject request":3},"top_variants":{"register request -> check ticket -> examine casually -> decide -> pay compensation":1,"register request -> check ticket -> examine thoroughly -> decide -> reject request":1,"register request -> examine casually -> check ticket -> decide -> pay compensation":1,"register request -> examine casually -> check ticket -> decide -> reinitiate request -> check ticket -> examine casually -> decide -> reinitiate request -> examine casually -> check ticket -> decide -> reject request":1,"register request -> examine casually -> check ticket -> decide -> reinitiate request -> examine thoroughly -> check ticket -> decide -> pay compensation":1,"register request -> examine thoroughly -> check ticket -> decide -> reject request":1},"label":"running-example.xes","blurb":"pm4py teaching log"}};
+
+</script>
+<script>
+(function () {
+  "use strict";
+
+  var current = null, currentKey = "receipt";
+  var fmt = function (n) { return n.toLocaleString("en-US"); };
+  var pct = function (x) { return (x * 100).toFixed(1) + "%"; };
+
+  // ── tooltip ────────────────────────────────────────────────────────────
+  var tip = document.getElementById("tip");
+  function bindTip(el, html) {
+    function show(e) {
+      tip.innerHTML = html;
+      tip.classList.add("on");
+      var r = tip.getBoundingClientRect();
+      var x = (e.clientX || 0) + 14, y = (e.clientY || 0) + 14;
+      if (x + r.width > window.innerWidth - 8) x = window.innerWidth - r.width - 8;
+      if (y + r.height > window.innerHeight - 8) y = (e.clientY || 0) - r.height - 12;
+      tip.style.left = x + "px"; tip.style.top = y + "px";
+    }
+    el.addEventListener("mousemove", show);
+    el.addEventListener("mouseleave", function () { tip.classList.remove("on"); });
+    el.addEventListener("focus", function () {
+      var b = el.getBoundingClientRect();
+      show({ clientX: b.left + 8, clientY: b.bottom });
+    });
+    el.addEventListener("blur", function () { tip.classList.remove("on"); });
+  }
+
+  // ── helpers ────────────────────────────────────────────────────────────
+  function entries(o) { return Object.keys(o || {}).map(function (k) { return [k, o[k]]; }); }
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt !== undefined) n.textContent = txt;
+    return n;
+  }
+  function daysBetween(a, b) {
+    var t0 = Date.parse(a), t1 = Date.parse(b);
+    if (isNaN(t0) || isNaN(t1)) return null;
+    return Math.max(0, Math.round((t1 - t0) / 86400000));
+  }
+  function shortDate(s) {
+    var d = new Date(s);
+    if (isNaN(d)) return "—";
+    return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+  }
+
+  // ── KPIs ───────────────────────────────────────────────────────────────
+  function renderKpis(d) {
+    var host = document.getElementById("kpis");
+    host.textContent = "";
+    var span = daysBetween(d.first_event, d.last_event);
+    var perCase = d.cases ? (d.events / d.cases) : 0;
+    var vs = entries(d.top_variants).sort(function (a, b) { return b[1] - a[1]; });
+    var happy = vs.length && d.cases ? vs[0][1] / d.cases : 0;
+
+    [
+      ["Events",     fmt(d.events),     "rows in the log"],
+      ["Cases",      fmt(d.cases),      perCase.toFixed(1) + " events each"],
+      ["Activities", fmt(d.activities), "distinct step names"],
+      ["Paths",      fmt(d.variants),   "unique orderings"],
+      ["Most common", pct(happy),       "of cases on one path"],
+      ["Span",       span === null ? "—" : fmt(span) + "d", span === null ? "" : shortDate(d.first_event)]
+    ].forEach(function (row) {
+      var c = el("div", "kpi");
+      c.appendChild(el("dt", null, row[0]));
+      c.appendChild(el("dd", null, row[1]));
+      if (row[2]) c.appendChild(el("div", "sub", row[2]));
+      host.appendChild(c);
+    });
+  }
+
+  // ── coverage meter ─────────────────────────────────────────────────────
+  function renderCoverage(d, shown) {
+    var host = document.getElementById("coverage");
+    host.textContent = "";
+    var vs = entries(d.top_variants).sort(function (a, b) { return b[1] - a[1]; }).slice(0, shown);
+    var covered = vs.reduce(function (s, v) { return s + v[1]; }, 0);
+    var frac = d.cases ? covered / d.cases : 0;
+
+    var track = el("div", "covtrack");
+    var fill = el("div", "covfill");
+    fill.style.width = (frac * 100).toFixed(2) + "%";
+    bindTip(fill, "<span class='t-name'>Top " + vs.length + " paths</span><span class='t-val'>" +
+      fmt(covered) + " of " + fmt(d.cases) + " cases &middot; " + pct(frac) + "</span>");
+    fill.tabIndex = 0;
+    track.appendChild(fill);
+    track.appendChild(el("div", "covrest"));
+    host.appendChild(track);
+
+    var lab = el("div", "covlabel");
+    var left = el("div");
+    left.innerHTML = "<b>" + pct(frac) + "</b> of cases run on the top " + vs.length +
+      " path" + (vs.length === 1 ? "" : "s");
+    var right = el("div");
+    var tail = d.variants - vs.length;
+    right.textContent = tail > 0
+      ? fmt(tail) + " further path" + (tail === 1 ? "" : "s") + " make up the rest"
+      : "every path shown";
+    right.style.color = "var(--ink-3)";
+    lab.appendChild(left); lab.appendChild(right);
+    host.appendChild(lab);
+  }
+
+  // ── variant runs ───────────────────────────────────────────────────────
+  function renderRuns(d, shown) {
+    var host = document.getElementById("runs");
+    host.textContent = "";
+    var vs = entries(d.top_variants).sort(function (a, b) { return b[1] - a[1]; }).slice(0, shown);
+    var max = vs.length ? vs[0][1] : 1;
+    var cum = 0;
+
+    document.getElementById("runs-note").textContent =
+      "Each row is one distinct ordering of steps, most common first. " +
+      d.variants.toLocaleString("en-US") + " orderings exist in this log; " +
+      vs.length + " are itemised here.";
+
+    vs.forEach(function (v, i) {
+      var steps = v[0].split(" -> ");
+      cum += v[1];
+      var share = d.cases ? v[1] / d.cases : 0;
+
+      var row = el("div", "run" + (i === 0 ? " top" : ""));
+
+      // line 1 — aligned numeric columns
+      var top = el("div", "run-top");
+      top.appendChild(el("div", "rank", String(i + 1)));
+      var track = el("div", "sharebar-track");
+      var bar = el("div", "sharebar");
+      bar.style.width = Math.max(2, (v[1] / max) * 100) + "%";
+      track.appendChild(bar);
+      top.appendChild(track);
+      top.appendChild(el("div", "num", fmt(v[1])));
+      top.appendChild(el("div", "num", pct(share)));
+      top.appendChild(el("div", "cum", pct(cum / d.cases)));
+      top.appendChild(el("div", "steps", steps.length + " steps"));
+      row.appendChild(top);
+
+      // line 2 — the path, in full, never truncated
+      var chain = el("div", "chain");
+      steps.forEach(function (s, k) {
+        if (k) chain.appendChild(el("span", "arrow", "▸"));
+        chain.appendChild(el("span", "step", s));
+      });
+      row.appendChild(chain);
+
+      row.tabIndex = 0;
+      bindTip(row, "<span class='t-name'>Path " + (i + 1) + " &middot; " + steps.length + " steps</span>" +
+        "<span class='t-val'>" + fmt(v[1]) + " cases &middot; " + pct(share) + "</span>" +
+        "<br>running total with all paths above: " + pct(cum / d.cases));
+      host.appendChild(row);
+    });
+
+    // table twin
+    var tw = document.getElementById("runs-table");
+    tw.textContent = "";
+    var t = el("table");
+    t.innerHTML = "<thead><tr><th class='n'>#</th><th>Path</th><th class='n'>Cases</th>" +
+      "<th class='n'>Share</th><th class='n'>Running</th></tr></thead>";
+    var tb = el("tbody"); var c2 = 0;
+    vs.forEach(function (v, i) {
+      c2 += v[1];
+      var tr = el("tr");
+      tr.innerHTML = "<td class='n'>" + (i + 1) + "</td><td class='seq'>" +
+        v[0].replace(/&/g, "&amp;").replace(/</g, "&lt;") + "</td><td class='n'>" + fmt(v[1]) +
+        "</td><td class='n'>" + pct(v[1] / d.cases) + "</td><td class='n'>" + pct(c2 / d.cases) + "</td>";
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb); tw.appendChild(t);
+  }
+
+  // ── bar list ───────────────────────────────────────────────────────────
+  // ── pasted SVG: sanitise, then adapt to the page ───────────────────────
+  //
+  // Pasted markup is untrusted. The published artifact's CSP would block
+  // inline script, but this same file opened from disk would not -- so the
+  // scrubbing below is the actual guard, not the CSP.
+  var SVG_NS = "http://www.w3.org/2000/svg";
+
+  function sanitizeSvg(text) {
+    var doc = new DOMParser().parseFromString(text, "image/svg+xml");
+    if (doc.getElementsByTagName("parsererror").length) {
+      throw new Error("that does not parse as SVG");
+    }
+    var root = doc.documentElement;
+    if (!root || root.localName.toLowerCase() !== "svg") {
+      throw new Error("the root element is <" + (root ? root.localName : "?") + ">, not <svg>");
+    }
+
+    var BANNED = { script: 1, foreignobject: 1, iframe: 1, object: 1, embed: 1,
+                   use: 0, image: 0, animate: 1, set: 1, handler: 1 };
+    var walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+    var doomed = [], node;
+    while ((node = walker.nextNode())) {
+      if (BANNED[node.localName.toLowerCase()] === 1) { doomed.push(node); continue; }
+      for (var i = node.attributes.length - 1; i >= 0; i--) {
+        var attr = node.attributes[i];
+        var name = attr.name.toLowerCase();
+        // event handlers, and any reference that could leave the page
+        if (name.indexOf("on") === 0) { node.removeAttribute(attr.name); continue; }
+        if (name === "href" || name === "xlink:href") {
+          if (attr.value.trim().charAt(0) !== "#") node.removeAttribute(attr.name);
+        }
+        if (name === "style" && /url\s*\(|expression|@import/i.test(attr.value)) {
+          node.removeAttribute(attr.name);
+        }
+      }
+    }
+    doomed.forEach(function (n) { if (n.parentNode) n.parentNode.removeChild(n); });
+    return root;
+  }
+
+  function adaptSvg(root) {
+    // Graphviz hardcodes a white background polygon and black ink, so left
+    // alone this is a white slab in dark mode.
+    var graph = root.querySelector("g.graph") || root;
+    // Direct child only. Graphviz puts the canvas background there, while a
+    // white *node* -- which `pmx dfg` emits for a zero-frequency activity --
+    // is nested inside a g.node and must survive.
+    var first = null;
+    for (var c = 0; c < graph.children.length; c++) {
+      if (graph.children[c].localName === "polygon") { first = graph.children[c]; break; }
+    }
+    if (first) {
+      var f = (first.getAttribute("fill") || "").toLowerCase();
+      if (f === "white" || f === "#ffffff" || f === "#fff") first.remove();
+    }
+    // Remap Graphviz's black ink to the page's, but only where it sits on the
+    // page background. `pmx dfg` shades nodes on a white-to-blue frequency
+    // scale, and recolouring the label inside one of those would put white
+    // text on a near-white node in dark mode. So: a group that paints its own
+    // background keeps its black ink; everything else inherits ours.
+    function isBlack(v) {
+      v = (v || "").toLowerCase().trim();
+      return v === "black" || v === "#000000" || v === "#000";
+    }
+    function paintsOwnBackground(group) {
+      var shapes = group.querySelectorAll("polygon,ellipse,rect,path");
+      for (var i = 0; i < shapes.length; i++) {
+        var f = (shapes[i].getAttribute("fill") || "").toLowerCase().trim();
+        if (f && f !== "none" && f !== "transparent" && !isBlack(f)) return true;
+      }
+      return false;
+    }
+    var groups = root.querySelectorAll("g.node, g.edge");
+    var shielded = [];
+    for (var g = 0; g < groups.length; g++) {
+      if (paintsOwnBackground(groups[g])) shielded.push(groups[g]);
+    }
+    function isShielded(node) {
+      for (var i = 0; i < shielded.length; i++) {
+        if (shielded[i].contains(node)) return true;
+      }
+      return false;
+    }
+    var all = root.querySelectorAll("*");
+    for (var i = 0; i < all.length; i++) {
+      if (isShielded(all[i])) continue;
+      ["fill", "stroke"].forEach(function (prop) {
+        if (isBlack(all[i].getAttribute(prop))) {
+          all[i].setAttribute(prop, "currentColor");
+        }
+      });
+    }
+    // Keep the viewBox, drop the fixed pixel size, so the container decides.
+    if (!root.getAttribute("viewBox")) {
+      var w = parseFloat(root.getAttribute("width"));
+      var h = parseFloat(root.getAttribute("height"));
+      if (w && h) root.setAttribute("viewBox", "0 0 " + w + " " + h);
+    }
+    root.removeAttribute("width");
+    root.removeAttribute("height");
+    root.setAttribute("preserveAspectRatio", "xMinYMin meet");
+    return root;
+  }
+
+  function showModel(text) {
+    var box = document.getElementById("modelbox");
+    var root = adaptSvg(sanitizeSvg(text));
+    box.textContent = "";
+    box.appendChild(document.importNode(root, true));
+    box.hidden = false;
+    document.getElementById("model-empty").hidden = true;
+    document.getElementById("modelclear").hidden = false;
+    var n = box.querySelectorAll("g.node").length;
+    var e = box.querySelectorAll("g.edge").length;
+    return n ? n + " nodes, " + e + " edges" : "rendered";
+  }
+
+  // ── transitions (exact DFG) ────────────────────────────────────────────
+  function renderEdges(d) {
+    var card = document.getElementById("edges-card");
+    var g = d.dfg;
+    if (!g || !g.edges || !g.edges.length) {
+      card.hidden = true;
+      return;
+    }
+    card.hidden = false;
+    var host = document.getElementById("edges");
+    host.textContent = "";
+    var rows = g.edges.slice().sort(function (a, b) { return b.count - a.count; });
+    var max = rows[0].count;
+    var total = g.edge_total || rows.length;
+
+    document.getElementById("edges-note").textContent =
+      "Which activity directly follows which, counted across every case -- not just the "
+      + "paths itemised above. " + fmt(Object.keys(g.activities || {}).length)
+      + " activities and " + fmt(total) + " transitions"
+      + (total > rows.length ? "; the " + fmt(rows.length) + " heaviest are shown." : ".");
+
+    rows.forEach(function (r) {
+      var row = el("div", "bar-row");
+      var lab = el("div", "bar-label");
+      var wrap = el("span", "edge-label");
+      wrap.appendChild(el("span", "a", r.from));
+      wrap.appendChild(el("span", "arrow", "▸"));
+      wrap.appendChild(el("span", "a", r.to));
+      if (r.from === r.to) wrap.appendChild(el("i", "loop", "loop"));
+      lab.appendChild(wrap);
+      lab.title = r.from + " → " + r.to;
+      row.appendChild(lab);
+      var track = el("div", "bar-track");
+      var fill = el("div", "bar-fill");
+      fill.style.width = Math.max(2, (r.count / max) * 100) + "%";
+      track.appendChild(fill);
+      row.appendChild(track);
+      row.appendChild(el("div", "bar-val", fmt(r.count)));
+      row.tabIndex = 0;
+      bindTip(row, "<span class='t-name'>" + esc(r.from) + " &rarr; " + esc(r.to) + "</span>" +
+        "<span class='t-val'>" + fmt(r.count) + " occurrences</span>" +
+        (r.from === r.to ? "<br>self-loop: the activity repeats" : ""));
+      host.appendChild(row);
+    });
+
+    simpleTable("edges-table", ["From", "To", "Count"],
+      rows.map(function (r) { return [r.from, r.to, fmt(r.count)]; }));
+  }
+
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+
+  function renderBars(hostId, obj, total, alt, unit) {
+    var host = document.getElementById(hostId);
+    host.textContent = "";
+    var rows = entries(obj).sort(function (a, b) { return b[1] - a[1]; });
+    var max = rows.length ? rows[0][1] : 1;
+    rows.forEach(function (r) {
+      var row = el("div", "bar-row");
+      var lab = el("div", "bar-label", r[0]);
+      lab.title = r[0];
+      row.appendChild(lab);
+      var track = el("div", "bar-track");
+      var fill = el("div", "bar-fill" + (alt ? " alt" : ""));
+      fill.style.width = Math.max(2, (r[1] / max) * 100) + "%";
+      track.appendChild(fill);
+      row.appendChild(track);
+      row.appendChild(el("div", "bar-val", fmt(r[1])));
+      row.tabIndex = 0;
+      bindTip(row, "<span class='t-name'>" + r[0].replace(/&/g, "&amp;").replace(/</g, "&lt;") + "</span>" +
+        "<span class='t-val'>" + fmt(r[1]) + " " + unit + "</span>" +
+        (total ? "<br>" + pct(r[1] / total) + " of " + fmt(total) : ""));
+      host.appendChild(row);
+    });
+  }
+
+  function simpleTable(hostId, cols, rows) {
+    var tw = document.getElementById(hostId);
+    tw.textContent = "";
+    var t = el("table");
+    t.innerHTML = "<thead><tr>" + cols.map(function (c, i) {
+      return "<th" + (i ? " class='n'" : "") + ">" + c + "</th>";
+    }).join("") + "</tr></thead>";
+    var tb = el("tbody");
+    rows.forEach(function (r) {
+      var tr = el("tr");
+      tr.innerHTML = r.map(function (c, i) {
+        return "<td" + (i ? " class='n'" : "") + ">" +
+          String(c).replace(/&/g, "&amp;").replace(/</g, "&lt;") + "</td>";
+      }).join("");
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb); tw.appendChild(t);
+  }
+
+  // ── render all ─────────────────────────────────────────────────────────
+  function render() {
+    var d = current;
+    var shown = Math.min(parseInt(document.getElementById("topn").value, 10),
+                         Object.keys(d.top_variants || {}).length);
+    document.getElementById("src").textContent = d.label || d.source || "";
+
+    renderKpis(d);
+    renderCoverage(d, shown);
+    renderRuns(d, shown);
+    renderEdges(d);
+    renderBars("acts", d.top_activities, d.events, false, "events");
+    renderBars("starts", d.start_activities, d.cases, false, "cases");
+    renderBars("ends", d.end_activities, d.cases, true, "cases");
+
+    simpleTable("acts-table", ["Activity", "Events", "Share"],
+      entries(d.top_activities).sort(function (a, b) { return b[1] - a[1]; })
+        .map(function (r) { return [r[0], fmt(r[1]), pct(r[1] / d.events)]; }));
+
+    var endRows = entries(d.start_activities).sort(function (a, b) { return b[1] - a[1]; })
+      .map(function (r) { return ["Start", r[0], fmt(r[1]), pct(r[1] / d.cases)]; })
+      .concat(entries(d.end_activities).sort(function (a, b) { return b[1] - a[1]; })
+      .map(function (r) { return ["End", r[0], fmt(r[1]), pct(r[1] / d.cases)]; }));
+    simpleTable("ends-table", ["Position", "Activity", "Cases", "Share"], endRows);
+  }
+
+  // ── table toggles ──────────────────────────────────────────────────────
+  [["t-runs", "runs-chart", "runs-table"],
+   ["t-edges", "edges-chart", "edges-table"],
+   ["t-acts", "acts-chart", "acts-table"],
+   ["t-ends", "ends-chart", "ends-table"]].forEach(function (t) {
+    var btn = document.getElementById(t[0]);
+    btn.addEventListener("click", function () {
+      var on = btn.getAttribute("aria-pressed") === "true";
+      btn.setAttribute("aria-pressed", String(!on));
+      btn.textContent = on ? "Table" : "Chart";
+      document.getElementById(t[1]).hidden = !on;
+      document.getElementById(t[2]).hidden = on;
+    });
+  });
+
+  // The sample logs ship with their exact DFG alongside the inspect payload.
+  Object.keys(DFGS).forEach(function (k) { if (DATASETS[k]) DATASETS[k].dfg = DFGS[k]; });
+
+  // ── dataset switcher ───────────────────────────────────────────────────
+  var sel = document.getElementById("ds");
+  Object.keys(DATASETS).forEach(function (k) {
+    var o = document.createElement("option");
+    o.value = k;
+    o.textContent = DATASETS[k].label + " — " + DATASETS[k].blurb;
+    sel.appendChild(o);
+  });
+  sel.value = currentKey;
+  sel.addEventListener("change", function () {
+    currentKey = sel.value; current = DATASETS[currentKey]; render();
+  });
+  document.getElementById("topn").addEventListener("change", render);
+
+  // ── paste panel ────────────────────────────────────────────────────────
+  var pasteBtn = document.getElementById("pastebtn"), panel = document.getElementById("paste");
+  pasteBtn.addEventListener("click", function () {
+    var on = pasteBtn.getAttribute("aria-pressed") === "true";
+    pasteBtn.setAttribute("aria-pressed", String(!on));
+    panel.hidden = on;
+    if (!on) document.getElementById("json").focus();
+  });
+  document.getElementById("clear").addEventListener("click", function () {
+    document.getElementById("json").value = "";
+    document.getElementById("msg").textContent = "";
+    document.getElementById("msg").className = "msg";
+  });
+  document.getElementById("load").addEventListener("click", function () {
+    var msg = document.getElementById("msg");
+    var raw = document.getElementById("json").value.trim();
+    if (!raw) { msg.className = "msg err"; msg.textContent = "Paste some JSON first."; return; }
+    var d;
+    try { d = JSON.parse(raw); }
+    catch (e) {
+      msg.className = "msg err";
+      msg.textContent = "That is not valid JSON — " + e.message + ". Check you copied the whole output.";
+      return;
+    }
+    // Two payloads live in this one box: `pmx inspect --json` carries
+    // top_variants, `pmx dfg --json` carries edges. Detect by shape rather
+    // than making the reader pick the right field first.
+    var isDfg = Array.isArray(d.edges) && d.activities && !d.top_variants;
+    if (isDfg) {
+      var sameLog = current && current.source === d.source;
+      current.dfg = {
+        edges: d.edges, activities: d.activities,
+        start_activities: d.start_activities, end_activities: d.end_activities,
+        edge_total: d.edges.length
+      };
+      msg.className = "msg ok";
+      msg.textContent = "Loaded " + d.edges.length.toLocaleString("en-US") +
+        " exact transitions" + (sameLog ? "." : " — note these are from a different log than the view above.");
+      render();
+      return;
+    }
+
+    var need = ["events", "cases", "activities", "variants", "top_variants"];
+    var missing = need.filter(function (k) { return !(k in d); });
+    if (missing.length) {
+      msg.className = "msg err";
+      msg.textContent = "Missing " + missing.join(", ") +
+        ". This wants the output of `pmx inspect --json` or `pmx dfg --json`.";
+      return;
+    }
+    d.label = (d.source || "pasted log").split("/").pop();
+    d.blurb = "pasted";
+    current = d;
+
+    // Keep the selector honest: it must name whatever is actually on screen.
+    var opt = sel.querySelector('option[value="__pasted"]');
+    if (!opt) {
+      opt = document.createElement("option");
+      opt.value = "__pasted";
+      sel.appendChild(opt);
+    }
+    opt.textContent = d.label + " — pasted";
+    sel.value = "__pasted";
+    currentKey = "__pasted";
+    DATASETS.__pasted = d;
+
+    msg.className = "msg ok";
+    msg.textContent = "Loaded " + d.label + " — " + d.cases.toLocaleString("en-US") + " cases.";
+    render();
+  });
+
+  // ── model panel ────────────────────────────────────────────────────────
+  var modelBtn = document.getElementById("modelbtn");
+  var modelPanel = document.getElementById("modelpaste");
+  var modelMsg = document.getElementById("modelmsg");
+
+  modelBtn.addEventListener("click", function () {
+    var on = modelBtn.getAttribute("aria-pressed") === "true";
+    modelBtn.setAttribute("aria-pressed", String(!on));
+    modelPanel.hidden = on;
+    if (!on) document.getElementById("svgin").focus();
+  });
+
+  document.getElementById("svgload").addEventListener("click", function () {
+    var text = document.getElementById("svgin").value.trim();
+    if (!text) {
+      modelMsg.className = "msg err";
+      modelMsg.textContent = "Paste the contents of the .svg file first.";
+      return;
+    }
+    try {
+      var what = showModel(text);
+      modelMsg.className = "msg ok";
+      modelMsg.textContent = "Rendered — " + what + ".";
+    } catch (e) {
+      modelMsg.className = "msg err";
+      modelMsg.textContent = "Could not render it: " + e.message +
+        ". Use the .svg from `pmx discover -i`, not the .pnml or .bpmn.";
+    }
+  });
+
+  document.getElementById("modelclear").addEventListener("click", function () {
+    var box = document.getElementById("modelbox");
+    box.textContent = "";
+    box.hidden = true;
+    document.getElementById("model-empty").hidden = false;
+    document.getElementById("modelclear").hidden = true;
+    document.getElementById("svgin").value = "";
+    modelMsg.textContent = "";
+    modelMsg.className = "msg";
+  });
+
+  var fitBtn = document.getElementById("fitbtn");
+  fitBtn.addEventListener("click", function () {
+    var on = fitBtn.getAttribute("aria-pressed") === "true";
+    fitBtn.setAttribute("aria-pressed", String(!on));
+    fitBtn.textContent = on ? "Actual size" : "Fit width";
+    document.getElementById("modelbox").classList.toggle("fit", !on);
+  });
+
+  current = DATASETS[currentKey];
+  render();
+})();
+</script>
