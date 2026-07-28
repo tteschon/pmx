@@ -196,14 +196,18 @@ browser, so a log you cannot upload anywhere is still fine to look at.
 
 Two panels take extra input:
 
-- **The mined model** accepts the SVG from `discover -i`. Use
-  `--bgcolor transparent` so it works in either theme — the page strips the
-  Graphviz background and remaps its black ink to follow your theme, while
-  leaving frequency-shaded nodes and their labels alone.
+- **The mined model** shows the BPMN that `discover` mined from whichever log is
+  selected — all four sample logs ship with theirs, so it is populated on open.
+  To see your own, paste the SVG from `discover -i`; **Remove** drops the paste
+  and falls back to the bundled one.
 
   ```bash
   pmx discover YOUR_LOG.xes --notation bpmn -o m.bpmn -i m.svg --bgcolor transparent
   ```
+
+  `--bgcolor transparent` is what lets it sit on either theme: the page strips
+  the Graphviz background and remaps its black ink to follow your theme, while
+  leaving frequency-shaded nodes and their labels readable on their own fill.
 
 - **Transitions** shows exact directly-follows counts. The same paste box takes
   either payload — it tells `inspect` and `dfg` output apart by shape.
