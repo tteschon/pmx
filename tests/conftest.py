@@ -69,6 +69,96 @@ def xes_log(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def prov_ocel(tmp_path: Path) -> Path:
+    """A tiny object-centric provisioning log, written as OCEL 2.0.
+
+    One opportunity provisions two subscriptions against one organization, and
+    a single "enable collection" event touches both subscriptions -- so the log
+    carries one convergence and two one-to-many relations, each checkable by
+    hand.
+    """
+    import pandas as pd
+    import pm4py
+    from pm4py.objects.ocel.obj import OCEL
+
+    rows: list[dict[str, object]] = []
+
+    def ev(eid: str, act: str, ts: str, pairs: list[tuple[str, str]]) -> None:
+        for oid, otype in pairs:
+            rows.append(
+                {
+                    "ocel:eid": eid,
+                    "ocel:activity": act,
+                    "ocel:timestamp": pd.Timestamp(ts),
+                    "ocel:oid": oid,
+                    "ocel:type": otype,
+                }
+            )
+
+    ev("e1", "closed won", "2026-01-05 09:00", [("OPP-1", "opportunity")])
+    ev(
+        "e2",
+        "create org",
+        "2026-01-05 10:00",
+        [("OPP-1", "opportunity"), ("ORG-1", "organization")],
+    )
+    ev(
+        "e3",
+        "provision",
+        "2026-01-05 11:00",
+        [
+            ("OPP-1", "opportunity"),
+            ("OLI-1", "line_item"),
+            ("SUB-1", "subscription"),
+            ("ORG-1", "organization"),
+        ],
+    )
+    ev(
+        "e4",
+        "provision",
+        "2026-01-05 11:05",
+        [
+            ("OPP-1", "opportunity"),
+            ("OLI-2", "line_item"),
+            ("SUB-2", "subscription"),
+            ("ORG-1", "organization"),
+        ],
+    )
+    # one event, both subscriptions -> convergence on subscription
+    ev(
+        "e5",
+        "enable collection",
+        "2026-01-05 12:00",
+        [("SUB-1", "subscription"), ("SUB-2", "subscription"), ("COL-1", "collection")],
+    )
+    ev(
+        "e6",
+        "activate",
+        "2026-01-06 09:00",
+        [("SUB-1", "subscription"), ("ORG-1", "organization")],
+    )
+    ev(
+        "e7",
+        "activate",
+        "2026-01-06 09:05",
+        [("SUB-2", "subscription"), ("ORG-1", "organization")],
+    )
+    ev("e8", "close", "2026-01-06 10:00", [("OPP-1", "opportunity")])
+
+    relations = pd.DataFrame(rows)
+    events = relations[["ocel:eid", "ocel:activity", "ocel:timestamp"]].drop_duplicates(
+        "ocel:eid"
+    )
+    objects = relations[["ocel:oid", "ocel:type"]].drop_duplicates("ocel:oid")
+
+    path = tmp_path / "provisioning.json"
+    pm4py.write_ocel2_json(
+        OCEL(events=events, objects=objects, relations=relations), str(path)
+    )
+    return path
+
+
+@pytest.fixture
 def csv_log(tmp_path: Path) -> Path:
     """A CSV log with non-standard column names, needing an explicit mapping."""
     rows = _rows("Case ID", "Activity", "Timestamp")

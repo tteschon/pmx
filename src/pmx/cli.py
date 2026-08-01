@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
@@ -12,6 +12,7 @@ from rich.table import Table
 
 from pmx import __version__, discovery
 from pmx import dfg as dfg_mod
+from pmx import ocel as ocel_mod
 from pmx.discovery import Algorithm, DiscoveryError, Notation
 from pmx.logs import (
     DEFAULT_ACTIVITY,
@@ -303,6 +304,222 @@ def dfg(
 
     for path in written:
         print(path)
+
+
+ocel_app = typer.Typer(
+    name="ocel",
+    help="Object-centric mining, for processes with no single case id.",
+    no_args_is_help=True,
+)
+app.add_typer(ocel_app)
+
+OcelPath = Annotated[
+    Path,
+    typer.Argument(
+        metavar="OCEL",
+        help="Object-centric log (.json, .xml, .sqlite, .csv; OCEL 1.0 or 2.0).",
+        show_default=False,
+    ),
+]
+
+
+def _read_ocel(path: Path) -> Any:
+    """Read an OCEL, turning an `OcelError` into a clean exit-1 with a message.
+
+    Returns `Any` rather than pm4py's `OCEL`: importing that type at module
+    scope would pull pm4py in on every `pmx --help`, which is the slow import
+    the rest of the CLI is careful to defer.
+    """
+    try:
+        return ocel_mod.read(path)
+    except ocel_mod.OcelError as exc:
+        err.print(f"[red]error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+
+@ocel_app.command("inspect")
+def ocel_inspect(
+    log_path: OcelPath,
+    top: Annotated[
+        int, typer.Option("--top", "-n", min=1, help="Rows per distribution.")
+    ] = 10,
+    as_json: Annotated[
+        bool, typer.Option("--json", help="Emit JSON instead of tables.")
+    ] = False,
+) -> None:
+    """Profile an object-centric log, and price up flattening it.
+
+    Convergence is what a chosen case id would double-count; divergence is
+    what it would merge or split. Both are reasons a classic log would lie.
+    """
+    ocel = _read_ocel(log_path)
+    summary = ocel_mod.summarize(ocel, source=str(log_path), top=top)
+
+    if as_json:
+        print(json.dumps(summary.as_dict(), indent=2))
+        return
+    _print_ocel_summary(summary, top)
+
+
+@ocel_app.command("discover")
+def ocel_discover(
+    log_path: OcelPath,
+    notation: Annotated[
+        ocel_mod.Notation,
+        typer.Option(
+            "--notation", help="ocdfg (directly-follows) or ocpn (Petri net)."
+        ),
+    ] = ocel_mod.Notation.OCDFG,
+    image: Annotated[
+        Path | None,
+        typer.Option(
+            "--image", "-i", help="Render here (.png/.svg/.pdf).", show_default=False
+        ),
+    ] = None,
+    annotation: Annotated[
+        str, typer.Option("--annotation", help="ocdfg only: frequency or performance.")
+    ] = "frequency",
+    noise_threshold: Annotated[
+        float,
+        typer.Option(
+            "--noise-threshold", min=0.0, max=1.0, help="ocpn only: filter noise."
+        ),
+    ] = 0.0,
+    bgcolor: BgColorOpt = "white",
+) -> None:
+    """Mine a model that needs no case id.
+
+    Every object type keeps its own flow through the shared activities, so a
+    step touching several types shows up once rather than once per type.
+    """
+    ocel = _read_ocel(log_path)
+    try:
+        model = ocel_mod.discover(
+            ocel, notation=notation, noise_threshold=noise_threshold
+        )
+        target = image or log_path.with_suffix(f".{notation.value}.svg")
+        written = ocel_mod.render(
+            model, target, notation=notation, annotation=annotation, bgcolor=bgcolor
+        )
+    except DiscoveryError as exc:
+        err.print(f"[red]error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    err.print(
+        f"[green]discovered[/green] {notation.value} over {len(ocel.objects):,} objects"
+    )
+    print(written)
+
+
+@ocel_app.command("flatten")
+def ocel_flatten(
+    log_path: OcelPath,
+    object_type: Annotated[
+        str,
+        typer.Option(
+            "--object-type", "-t", help="Which object type becomes the case id."
+        ),
+    ],
+    output: Annotated[
+        Path,
+        typer.Option("--output", "-o", help="Write the classic log here (.xes/.csv)."),
+    ],
+) -> None:
+    """Collapse an OCEL to a classic log, for `pmx inspect` and `pmx discover`.
+
+    Check `pmx ocel inspect` first: if the chosen type shows convergence, the
+    flattened log counts some events more than once.
+    """
+    import pm4py
+
+    ocel = _read_ocel(log_path)
+    try:
+        flat = ocel_mod.flatten(ocel, object_type)
+    except ocel_mod.OcelError as exc:
+        err.print(f"[red]error:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    if output.suffix.lower() == ".csv":
+        flat.to_csv(output, index=False)
+    else:
+        pm4py.write_xes(flat, str(output))
+
+    # Compare against the events that actually touch this object type, not the
+    # whole log: most events touch none of a given type, so the total would
+    # never trip and the warning would be dead code.
+    touching = ocel.relations[ocel.relations[ocel.object_type_column] == object_type]
+    rows, events = len(flat), int(touching[ocel.event_id_column].nunique())
+    if rows > events:
+        err.print(
+            f"[yellow]note:[/yellow] {rows:,} rows from {events:,} events that touch "
+            f"{object_type} — {rows - events:,} counted more than once, because an "
+            f"event can touch several {object_type} objects. Durations and counts "
+            f"computed from this log are inflated."
+        )
+    print(output)
+
+
+def _print_ocel_summary(summary: ocel_mod.Summary, top: int) -> None:
+    overview = Table(
+        title=f"Object-centric log: {summary.source}", title_justify="left"
+    )
+    overview.add_column("metric", style="cyan")
+    overview.add_column("value", justify="right")
+    overview.add_row("events", f"{summary.events:,}")
+    overview.add_row("objects", f"{summary.objects:,}")
+    overview.add_row("object types", f"{len(summary.object_types):,}")
+    overview.add_row("event-to-object links", f"{summary.relations:,}")
+    out.print(overview)
+
+    types = Table(title="Object types", title_justify="left")
+    types.add_column("type", style="cyan", overflow="fold")
+    types.add_column("objects", justify="right")
+    types.add_column("touched by", overflow="fold")
+    for name, count in summary.object_types.items():
+        acts = summary.type_activities.get(name, [])
+        shown = ", ".join(acts[:3]) + ("…" if len(acts) > 3 else "")
+        types.add_row(name, f"{count:,}", shown or "-")
+    out.print(types)
+
+    conv = Table(
+        title="Convergence — what flattening would double-count",
+        title_justify="left",
+    )
+    conv.add_column("case id would be", style="cyan", overflow="fold")
+    conv.add_column("events", justify="right")
+    conv.add_column("rows", justify="right")
+    conv.add_column("inflated by", justify="right")
+    for c in summary.convergence:
+        conv.add_row(
+            c.object_type,
+            f"{c.events:,}",
+            f"{c.flattened_rows:,}",
+            f"{c.duplicated:+,}" if c.duplicated else "—",
+        )
+    out.print(conv)
+
+    if summary.divergence:
+        div = Table(
+            title="Divergence — what flattening would merge or split",
+            title_justify="left",
+        )
+        div.add_column("one", style="cyan", overflow="fold")
+        div.add_column("spans", justify="right")
+        div.add_column("of", style="cyan", overflow="fold")
+        div.add_column("example", overflow="fold")
+        for d in summary.divergence[:top]:
+            div.add_row(
+                d.parent,
+                f"{d.max_children:,}",
+                d.child,
+                f"{d.example} → {', '.join(d.example_children[:4])}",
+            )
+        out.print(div)
+        err.print(
+            "[dim]A case id above 1 in either table distorts the result. "
+            "That is the argument for staying object-centric.[/dim]"
+        )
 
 
 def _print_dfg(graph: dfg_mod.Dfg, top: int) -> None:

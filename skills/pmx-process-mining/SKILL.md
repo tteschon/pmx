@@ -23,6 +23,13 @@ This skill covers **discovery only**. `pmx` can answer:
 - How many cases, activities, variants? Over what time span?
 - Give me a process model as a Petri net or BPMN diagram.
 - How often does one activity directly follow another? (`dfg`)
+- What does a process with no single case id look like? (`ocel`)
+
+**If the log is object-centric, use `pmx ocel`, not `inspect`/`discover`.** A
+process where one order yields many subscriptions, or one account spans many
+orders, has no case id that is not a distortion. `pmx ocel inspect` quantifies
+that distortion before anything is mined; use it to decide whether flattening
+is defensible at all.
 
 It **cannot** do conformance checking, bottleneck or waiting-time analysis,
 social-network mining, or filtering. If the user asks for those, say so
@@ -88,6 +95,10 @@ pmx inspect LOG [-n TOP] [--json]
 pmx discover LOG [-a ALGO] [--notation petri|bpmn] [-o FILE] [-i IMAGE]
                  [--noise-threshold F] [--dependency-threshold F] [--bgcolor C]
 pmx dfg LOG [--json] [-o FILE] [-i IMAGE] [--max-edges N] [--bgcolor C]
+
+pmx ocel inspect  OCEL [--json] [-n TOP]
+pmx ocel discover OCEL [--notation ocdfg|ocpn] [-i IMAGE]
+pmx ocel flatten  OCEL -t TYPE -o FILE
 ```
 
 `dfg` counts which activity directly follows which, across the whole log.

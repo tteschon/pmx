@@ -110,6 +110,38 @@ the JSON always carries every edge.
 uv run pmx dfg examples/data/receipt.xes -i map.svg --max-edges 20
 ```
 
+### Object-centric mining
+
+Some processes have no single case. An order provisions several subscriptions;
+a subscription outlives the order that created it. Any case id you pick
+distorts the result, so `pmx ocel` works on
+[OCEL](https://www.ocel-standard.org/) logs instead — one row per
+(event, object) pair, no case id at all.
+
+```bash
+uv run pmx ocel inspect log.json      # object types, and what flattening costs
+uv run pmx ocel discover log.json -i map.svg                 # OC-DFG
+uv run pmx ocel discover log.json --notation ocpn -i net.svg # Petri net per type
+```
+
+`inspect` prices up the two distortions before you commit to a case id:
+
+- **Convergence** — an event touching three objects of the chosen type becomes
+  three rows, inflating every count and duration downstream.
+- **Divergence** — one object's life spanning several of another type, so the
+  case id merges lifecycles that are separate or splits ones that are not.
+
+`flatten` is the bridge back to the case-centric commands, and warns when the
+type you picked is convergent:
+
+```bash
+uv run pmx ocel flatten log.json -t subscription -o subs.xes
+uv run pmx inspect subs.xes
+```
+
+Reads OCEL 1.0 and 2.0 in JSON, XML, SQLite, and CSV; the reader is chosen from
+the suffix, newest format first.
+
 ### CSV input
 
 `.xes` and `.xes.gz` are read directly. Any other file is treated as delimited

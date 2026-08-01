@@ -195,6 +195,80 @@ def test_dfg_rejects_max_edges_below_one(xes_log: Path, tmp_path: Path) -> None:
     assert result.exit_code != 0
 
 
+def test_ocel_inspect_json_is_parseable(prov_ocel: Path) -> None:
+    result = runner.invoke(app, ["ocel", "inspect", str(prov_ocel), "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["events"] == 8
+    assert payload["convergence"][0]["duplicated"] == 1
+
+
+def test_ocel_inspect_renders_tables(prov_ocel: Path) -> None:
+    result = runner.invoke(app, ["ocel", "inspect", str(prov_ocel)])
+
+    assert result.exit_code == 0
+    assert "Convergence" in result.stdout
+    assert "Divergence" in result.stdout
+
+
+def test_ocel_inspect_on_a_missing_file_exits_nonzero(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["ocel", "inspect", str(tmp_path / "absent.json")])
+
+    assert result.exit_code == 1
+
+
+@pytest.mark.parametrize("notation", ["ocdfg", "ocpn"])
+def test_ocel_discover_writes_an_image(
+    prov_ocel: Path, tmp_path: Path, notation: str
+) -> None:
+    target = tmp_path / f"{notation}.svg"
+
+    result = runner.invoke(
+        app,
+        ["ocel", "discover", str(prov_ocel), "--notation", notation, "-i", str(target)],
+    )
+
+    assert result.exit_code == 0
+    assert target.exists()
+    assert result.stdout.strip().endswith(str(target))
+
+
+def test_ocel_flatten_bridges_to_the_classic_commands(
+    prov_ocel: Path, tmp_path: Path
+) -> None:
+    target = tmp_path / "flat.xes"
+
+    flat = runner.invoke(
+        app, ["ocel", "flatten", str(prov_ocel), "-t", "opportunity", "-o", str(target)]
+    )
+    assert flat.exit_code == 0
+
+    # the whole point of flatten: the existing commands accept the result
+    onward = runner.invoke(app, ["inspect", str(target), "--json"])
+    assert onward.exit_code == 0
+    assert json.loads(onward.stdout)["cases"] == 1
+
+
+def test_ocel_flatten_rejects_an_unknown_object_type(
+    prov_ocel: Path, tmp_path: Path
+) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "ocel",
+            "flatten",
+            str(prov_ocel),
+            "-t",
+            "widget",
+            "-o",
+            str(tmp_path / "x.xes"),
+        ],
+    )
+
+    assert result.exit_code == 1
+
+
 def test_discover_rejects_an_unknown_algorithm(xes_log: Path) -> None:
     result = runner.invoke(app, ["discover", str(xes_log), "-a", "petrinet-magic"])
 

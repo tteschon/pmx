@@ -136,3 +136,42 @@ so an editor opening it will lay the nodes out itself.
 The Graphviz binary is a system package, not a Python one. `pip install
 graphviz` will not provide it -- that package is a wrapper that shells out to
 the binary, and pm4py already depends on it.
+
+## `pmx ocel`
+
+Object-centric logs: one row per (event, object) pair, no case id.
+
+```bash
+pmx ocel inspect  OCEL [--json] [-n TOP]
+pmx ocel discover OCEL [--notation ocdfg|ocpn] [-i IMAGE] [--annotation frequency|performance]
+                       [--noise-threshold F] [--bgcolor COLOR]
+pmx ocel flatten  OCEL -t TYPE -o FILE
+```
+
+Reads OCEL 1.0 and 2.0 from `.json`, `.xml`, `.sqlite`, `.csv`. The reader is
+picked from the suffix, 2.0 first, falling back to 1.0.
+
+### Reading `inspect`
+
+Two tables matter, and both answer "would a case id lie here?":
+
+- **Convergence** — events a flattened log would count more than once. An event
+  touching three objects of the chosen type becomes three rows.
+- **Divergence** — one object spanning several of another type. Above 1 means
+  the case id merges separate lifecycles or splits a single one.
+
+Report both numbers when recommending an approach. If either is above 1 for
+every candidate object type, say plainly that no case id is safe.
+
+### Notations
+
+| `--notation` | Produces | Tuning |
+|---|---|---|
+| `ocdfg` (default) | Directly-follows graph, one coloured flow per object type | `--annotation` |
+| `ocpn` | One Petri net per object type, sharing transitions | `--noise-threshold` |
+
+### `flatten` is a bridge, not an answer
+
+It converts an OCEL to a classic log so `pmx inspect` and `pmx discover` can
+read it. It prints a warning when the chosen type is convergent. Do not flatten
+silently — the warning is the point.
