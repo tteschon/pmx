@@ -12,7 +12,11 @@ later version. See the LICENSE file at the root of this repository, or
 from importlib.metadata import PackageNotFoundError, version
 
 try:
-    __version__ = version("pmx")
+    # The *distribution* is `pmx-cli`, not `pmx` -- that name belongs to an
+    # unrelated project on PyPI. Asking for "pmx" here would report 0.0.0.dev0
+    # on a normal install, or that other project's version on a machine which
+    # happens to have it.
+    __version__ = version("pmx-cli")
 except PackageNotFoundError:  # a source tree that was never installed
     __version__ = "0.0.0.dev0"
 

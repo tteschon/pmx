@@ -60,7 +60,18 @@ jobs:
           enable-cache: true
 
       - run: uv sync --locked --python ${{ matrix.python }}
-      - run: uv run pytest -q
+
+      # Coverage is measured on one leg only -- instrumenting all five costs
+      # time and tells you the same thing. Reported, not gated: there is no
+      # --cov-fail-under, so a dip is visible without blocking a merge.
+      - name: pytest
+        run: |
+          if [ "${{ matrix.os }}-${{ matrix.python }}" = "ubuntu-latest-3.14" ]; then
+            uv run pytest -q --cov --cov-report=term-missing
+          else
+            uv run pytest -q
+          fi
+        shell: bash
 
       # The CLI has to survive being invoked for real, not just imported:
       # Typer wires its options at import time, so a bad Annotated default

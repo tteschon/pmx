@@ -12,27 +12,48 @@ directly-follows transitions with `dfg`, and handle object-centric logs with
 ## Install
 
 ```bash
-uv sync
+uv tool install pmx-cli
 ```
 
-Rendering models to images additionally needs the Graphviz `dot` binary:
+Or run it without installing:
 
 ```bash
-brew install graphviz
+uvx --from pmx-cli pmx inspect your-log.xes
 ```
 
-Without it, `--image` fails with a clear message and BPMN export falls back to
-writing a valid file with no diagram layout. Everything else works.
+pip works too: `pip install pmx-cli`.
+
+The distribution is **`pmx-cli`** because `pmx` on PyPI belongs to an
+unrelated molecular-dynamics project. The command you run is `pmx`. Do not
+install both into the same environment.
+
+### Graphviz
+
+Rendering models to images needs the Graphviz `dot` **system** binary, which
+no Python package manager can install for you:
+
+```bash
+brew install graphviz          # macOS
+sudo apt install graphviz      # Debian/Ubuntu
+```
+
+Without it, `--image` fails with a message naming this step, and BPMN export
+falls back to writing a valid file with no diagram layout. Everything else
+works.
 
 ## Sample data
 
-pm4py's own test logs make the quickest smoke test. Fetch them into
-`examples/data/` (gitignored -- they belong to pm4py, and `receipt.xes` alone
-is 4 MB):
+The examples below use pm4py's own test logs. They are **not** part of the
+installed package -- fetching them needs a clone of this repository, because
+they belong to pm4py and `receipt.xes` alone is 4 MB:
 
 ```bash
+git clone https://github.com/tteschon/pmx && cd pmx
 ./examples/fetch-sample-logs.sh
 ```
+
+Any `.xes`, `.xes.gz`, or CSV of case/activity/timestamp rows works just as
+well -- see [CSV input](#csv-input).
 
 | Log | Cases | Events | Notes |
 |---|---|---|---|
@@ -48,7 +69,7 @@ Profile a log -- events, cases, activities, variants, case durations, and how
 concentrated the variants are:
 
 ```bash
-uv run pmx inspect examples/data/running-example.xes
+pmx inspect examples/data/running-example.xes
 ```
 
 The variants table carries each variant's share of cases and a running
@@ -68,26 +89,26 @@ re-orderings of the same work, and `--top-variants` will help where
 Machine-readable, for piping into `jq`:
 
 ```bash
-uv run pmx inspect examples/data/receipt.xes --json | jq '{cases, variants}'
+pmx inspect examples/data/receipt.xes --json | jq '{cases, variants}'
 ```
 
 Mine a Petri net, writing `running-example.pnml` next to the log:
 
 ```bash
-uv run pmx discover examples/data/running-example.xes
+pmx discover examples/data/running-example.xes
 ```
 
 Mine BPMN and render it at the same time:
 
 ```bash
-uv run pmx discover examples/data/receipt.xes --notation bpmn -o model.bpmn -i model.png
+pmx discover examples/data/receipt.xes --notation bpmn -o model.bpmn -i model.png
 ```
 
 `discover` prints one written path per line on stdout and its progress on
 stderr, so it composes:
 
 ```bash
-uv run pmx discover examples/data/running-example.xes | xargs open
+pmx discover examples/data/running-example.xes | xargs open
 ```
 
 ### Algorithms
@@ -106,7 +127,7 @@ Raising `--noise-threshold` filters infrequent behaviour from inside the miner.
 On `receipt.xes` it takes the model from 74 transitions to 66:
 
 ```bash
-uv run pmx discover examples/data/receipt.xes --noise-threshold 0.2 -o simpler.pnml
+pmx discover examples/data/receipt.xes --noise-threshold 0.2 -o simpler.pnml
 ```
 
 ### Making an unreadable model readable
@@ -121,7 +142,7 @@ effective tool. `--top-variants N` keeps the N most frequent variants;
 Both work on `discover` and `dfg`, and they are mutually exclusive.
 
 ```bash
-uv run pmx discover examples/data/receipt.xes --top-variants 10 -o model.bpmn --notation bpmn -i model.png
+pmx discover examples/data/receipt.xes --top-variants 10 -o model.bpmn --notation bpmn -i model.png
 ```
 
 On `receipt.xes` that is the difference between an unreadable tangle and a
@@ -150,7 +171,7 @@ many variants cover 50%, 80% and 95% of cases.
 it counts what the log literally contains, so nothing is smoothed away:
 
 ```bash
-uv run pmx dfg examples/data/receipt.xes --json
+pmx dfg examples/data/receipt.xes --json
 ```
 
 27 activities, 99 transitions, exact. Useful as a cross-check: the top-25
@@ -160,7 +181,7 @@ variant list covers 93% of cases and mentions only 16 of those 27 activities.
 the JSON always carries every edge.
 
 ```bash
-uv run pmx dfg examples/data/receipt.xes -i map.svg --max-edges 20
+pmx dfg examples/data/receipt.xes -i map.svg --max-edges 20
 ```
 
 ### Object-centric mining
@@ -172,9 +193,9 @@ distorts the result, so `pmx ocel` works on
 (event, object) pair, no case id at all.
 
 ```bash
-uv run pmx ocel inspect log.json      # object types, and what flattening costs
-uv run pmx ocel discover log.json -i map.svg                 # OC-DFG
-uv run pmx ocel discover log.json --notation ocpn -i net.svg # Petri net per type
+pmx ocel inspect log.json      # object types, and what flattening costs
+pmx ocel discover log.json -i map.svg                 # OC-DFG
+pmx ocel discover log.json --notation ocpn -i net.svg # Petri net per type
 ```
 
 `inspect` prices up the two distortions before you commit to a case id:
@@ -188,8 +209,8 @@ uv run pmx ocel discover log.json --notation ocpn -i net.svg # Petri net per typ
 type you picked is convergent:
 
 ```bash
-uv run pmx ocel flatten log.json -t subscription -o subs.xes
-uv run pmx inspect subs.xes
+pmx ocel flatten log.json -t subscription -o subs.xes
+pmx inspect subs.xes
 ```
 
 Reads OCEL 1.0 and 2.0 in JSON, XML, SQLite, and CSV; the reader is chosen from
@@ -201,7 +222,7 @@ the suffix, newest format first.
 text, and needs its columns mapped to the three roles pm4py cares about:
 
 ```bash
-uv run pmx inspect orders.csv \
+pmx inspect orders.csv \
   --case-id "Case ID" --activity-key "Activity" --timestamp-key "Timestamp"
 ```
 
@@ -214,7 +235,8 @@ mapping wrong and the error lists the columns the file actually has.
 
 `skills/pmx-process-mining/` wraps this CLI as an
 [Agent Skill](https://agentskills.io/specification), so an agent can drive it
-without being told the flags each time.
+without being told the flags each time. It lives in the repository rather than
+the installed package, so this needs a clone:
 
 ```bash
 mkdir -p ~/.claude/skills
@@ -231,8 +253,16 @@ uvx --from "git+https://github.com/agentskills/agentskills#subdirectory=skills-r
 
 ## Development
 
+From a clone:
+
+```bash
+git clone https://github.com/tteschon/pmx && cd pmx
+uv sync
+```
+
 ```bash
 uv run pytest         # tests
+uv run pytest --cov   # tests with coverage
 uv run ruff check .   # lint
 uv run ruff format .  # format
 uv run ty check       # types
@@ -249,28 +279,6 @@ uvx pre-commit install --hook-type pre-commit --hook-type pre-push
 CI runs the same checks on every push and pull request, across Python
 3.11-3.14 on Linux plus one macOS job. Graphviz is installed there because
 three tests render real images and would fail without it.
-
-## Licensing
-
-pmx is **AGPL-3.0-or-later**. Full text in [LICENSE](LICENSE).
-
-That is not a free choice. pmx imports pm4py, which is AGPL v3, making the two
-a combined work — so pmx cannot be distributed under a permissive licence such
-as MIT while it depends on pm4py. AGPL is the only option that lets pmx be
-distributed as it stands.
-
-What this means in practice:
-
-- **Running it locally**: no obligations. Private use is unrestricted.
-- **Distributing it**, or **running it behind a network service** that users
-  interact with: you must offer the complete corresponding source under the
-  AGPL, including any changes you make. Section 13 is what makes the network
-  case count, and it is the clause people miss.
-
-If you need to ship pmx without open-sourcing what it is part of, the route is
-a commercial pm4py licence from its authors — see
-[processintelligence.solutions](https://processintelligence.solutions/pm4py#licensing).
-Relicensing pmx alone does not help; the obligation comes from pm4py.
 
 ## Dashboard
 
@@ -314,3 +322,26 @@ Pasted SVG is sanitised before it touches the DOM: scripts, event handlers,
 `foreignObject`, and external references are stripped. The published artifact's
 CSP would block inline script anyway, but the file also opens straight from
 disk, where it would not.
+
+## Licensing
+
+pmx is **AGPL-3.0-or-later**. Full text in
+[LICENSE](https://github.com/tteschon/pmx/blob/main/LICENSE).
+
+That is not a free choice. pmx imports pm4py, which is AGPL v3, making the two
+a combined work — so pmx cannot be distributed under a permissive licence such
+as MIT while it depends on pm4py. AGPL is the only option that lets pmx be
+distributed as it stands.
+
+What this means in practice:
+
+- **Running it locally**: no obligations. Private use is unrestricted.
+- **Distributing it**, or **running it behind a network service** that users
+  interact with: you must offer the complete corresponding source under the
+  AGPL, including any changes you make. Section 13 is what makes the network
+  case count, and it is the clause people miss.
+
+If you need to ship pmx without open-sourcing what it is part of, the route is
+a commercial pm4py licence from its authors — see
+[processintelligence.solutions](https://processintelligence.solutions/pm4py#licensing).
+Relicensing pmx alone does not help; the obligation comes from pm4py.

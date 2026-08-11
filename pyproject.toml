@@ -1,5 +1,9 @@
 [project]
-name = "pmx"
+# The distribution is `pmx-cli` because `pmx` on PyPI is taken by an unrelated
+# molecular-dynamics toolbox. The command, the import package, and everything
+# a user types stay `pmx`; only the install name differs. `pmx.__init__` reads
+# the version by *distribution* name, so it says "pmx-cli" too.
+name = "pmx-cli"
 version = "0.1.0"
 description = "Process discovery from event logs, built on pm4py."
 readme = "README.md"
@@ -11,22 +15,60 @@ authors = [
     { name = "tteschon", email = "tyler.teschon@gmail.com" }
 ]
 requires-python = ">=3.11"
+keywords = [
+    "process-mining",
+    "process-discovery",
+    "event-log",
+    "xes",
+    "pm4py",
+    "bpmn",
+    "petri-net",
+]
+# No `License ::` classifier: PEP 639 forbids pairing one with the SPDX
+# `license` expression above, and build backends reject the combination.
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Utilities",
+    "Typing :: Typed",
+]
 dependencies = [
     "pm4py>=2.7.23.3",
     "rich>=15.0.0",
     "typer>=0.27.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/tteschon/pmx"
+Repository = "https://github.com/tteschon/pmx"
+Issues = "https://github.com/tteschon/pmx/issues"
+Changelog = "https://github.com/tteschon/pmx/blob/main/CHANGELOG.md"
+
 [project.scripts]
 pmx = "pmx.cli:main"
 
 [build-system]
-requires = ["uv_build>=0.11.32,<0.12.0"]
+requires = ["uv_build>=0.11.32,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+# uv_build derives the module name from the distribution name, which would
+# look for src/pmx_cli/. The import package stays `pmx`.
+module-name = "pmx"
 
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "pytest-cov>=7.0.0",
     "ruff>=0.16.0",
     "ty>=0.0.64",
 ]
@@ -37,7 +79,19 @@ ignore = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# No --cov here: coverage is measured in CI, and putting it in addopts makes
+# every local run pay for instrumentation.
 addopts = "-ra"
+
+[tool.coverage.run]
+source = ["src/pmx"]
+branch = true
+
+[tool.coverage.report]
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
 
 [tool.ty.environment]
 root = ["./src"]
