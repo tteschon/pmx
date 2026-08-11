@@ -10,7 +10,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from pmx import __version__, discovery
+from pmx import __version__, discovery, filters
 from pmx import dfg as dfg_mod
 from pmx import ocel as ocel_mod
 from pmx.discovery import Algorithm, DiscoveryError, Notation
@@ -74,6 +74,26 @@ BgColorOpt = Annotated[
         "somewhere with its own background.",
     ),
 ]
+TopVariantsOpt = Annotated[
+    int | None,
+    typer.Option(
+        "--top-variants",
+        min=1,
+        help="Keep only the N most frequent variants. The blunt fix for an "
+        "unreadable model, and usually more effective than --noise-threshold.",
+        show_default=False,
+    ),
+]
+MinCoverageOpt = Annotated[
+    float | None,
+    typer.Option(
+        "--min-coverage",
+        min=0.0,
+        max=1.0,
+        help="Keep the fewest variants covering this share of cases, e.g. 0.8.",
+        show_default=False,
+    ),
+]
 
 
 def _version_callback(value: bool) -> None:
@@ -107,6 +127,45 @@ def _load(
     except LogError as exc:
         err.print(f"[red]error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
+
+
+def _filter_variants(
+    log: EventLog, top_variants: int | None, min_coverage: float | None
+) -> EventLog:
+    """Apply the variant filter flags, reporting what was kept on stderr.
+
+    A filtered model describes frequent behaviour, not the process, so the
+    note is printed whenever a filter actually removes something -- never
+    silently.
+    """
+    if top_variants is not None and min_coverage is not None:
+        err.print(
+            "[red]error:[/red] --top-variants and --min-coverage are mutually "
+            "exclusive; pass one."
+        )
+        raise typer.Exit(code=1)
+    if top_variants is None and min_coverage is None:
+        return log
+
+    if top_variants is not None:
+        filtered, report = filters.top_variants(log, top_variants)
+    else:
+        assert min_coverage is not None
+        filtered, report = filters.variants_covering(log, min_coverage)
+
+    if report.is_noop:
+        err.print(
+            f"[dim]no filtering: the log has {report.total_variants:,} variants[/dim]"
+        )
+        return filtered
+
+    err.print(
+        f"[yellow]filtered[/yellow] to {report.kept_variants:,} of "
+        f"{report.total_variants:,} variants "
+        f"({report.kept_cases:,} of {report.total_cases:,} cases, "
+        f"{report.case_share:.1%})"
+    )
+    return filtered
 
 
 @app.command()
@@ -180,6 +239,8 @@ def discover_command(
             help="Heuristics miner: minimum dependency to keep an edge.",
         ),
     ] = 0.5,
+    top_variants: TopVariantsOpt = None,
+    min_coverage: MinCoverageOpt = None,
     bgcolor: BgColorOpt = "white",
     case_id: CaseIdOpt = DEFAULT_CASE_ID,
     activity_key: ActivityOpt = DEFAULT_ACTIVITY,
@@ -200,6 +261,7 @@ def discover_command(
         raise typer.Exit(code=1) from exc
 
     log = _load(log_path, case_id, activity_key, timestamp_key, separator)
+    log = _filter_variants(log, top_variants, min_coverage)
 
     try:
         model = discovery.discover(
@@ -257,6 +319,8 @@ def dfg(
     rankdir: Annotated[
         str, typer.Option("--rankdir", help="Graph direction: LR or TB.")
     ] = "LR",
+    top_variants: TopVariantsOpt = None,
+    min_coverage: MinCoverageOpt = None,
     bgcolor: BgColorOpt = "white",
     top: Annotated[
         int,
@@ -269,10 +333,12 @@ def dfg(
 ) -> None:
     """Count which activity directly follows which, across the whole log.
 
-    Unlike `discover`, nothing is generalised or filtered: these are the
-    transitions the log literally contains.
+    Unlike `discover`, nothing is generalised: these are the transitions the
+    log literally contains. `--top-variants`/`--min-coverage` narrow which
+    cases are counted, and are reported on stderr when they do.
     """
     log = _load(log_path, case_id, activity_key, timestamp_key, separator)
+    log = _filter_variants(log, top_variants, min_coverage)
     graph = dfg_mod.build(log)
 
     written: list[Path] = []
@@ -548,27 +614,110 @@ def _print_summary(summary: Summary) -> None:
     overview.add_row("cases", f"{summary.cases:,}")
     overview.add_row("activities", f"{summary.activities:,}")
     overview.add_row("variants", f"{summary.variants:,}")
+    if summary.distinct_activity_sets:
+        overview.add_row(
+            "distinct activity sets", f"{summary.distinct_activity_sets:,}"
+        )
     overview.add_row("first event", summary.first_event or "-")
     overview.add_row("last event", summary.last_event or "-")
+    overview.add_row(
+        "median case duration", _duration(summary.median_case_duration_seconds)
+    )
+    overview.add_row(
+        "mean case duration", _duration(summary.mean_case_duration_seconds)
+    )
+    overview.add_row("p90 case duration", _duration(summary.p90_case_duration_seconds))
+    overview.add_row("max case duration", _duration(summary.max_case_duration_seconds))
     out.print(overview)
+    _print_variant_concentration(summary)
 
-    for title, label, counts in (
-        ("Activities", "activity", summary.top_activities),
-        ("Start activities", "activity", summary.start_activities),
-        ("End activities", "activity", summary.end_activities),
-        ("Variants", "variant", summary.top_variants),
+    for title, label, counts, share_of in (
+        ("Activities", "activity", summary.top_activities, None),
+        ("Start activities", "activity", summary.start_activities, None),
+        ("End activities", "activity", summary.end_activities, None),
+        ("Variants", "variant", summary.top_variants, summary.cases),
     ):
         if counts:
-            out.print(_counts_table(title, label, counts))
+            out.print(_counts_table(title, label, counts, share_of=share_of))
 
 
-def _counts_table(title: str, label: str, counts: dict[str, int]) -> Table:
+def _print_variant_concentration(summary: Summary) -> None:
+    """One line saying how concentrated the log is, and what to do about it.
+
+    This is the number that decides whether `discover` can produce anything
+    readable, so it is worth stating outright rather than leaving the user to
+    work it out from the variants table.
+    """
+    if summary.variants_for_80pct is None or summary.variants <= 1:
+        return
+    parts = [
+        f"{summary.variants_for_50pct:,} variants cover 50% of cases, "
+        f"{summary.variants_for_80pct:,} cover 80%, "
+        f"{summary.variants_for_95pct:,} cover 95%"
+    ]
+    if summary.singleton_variants:
+        parts.append(f"{summary.singleton_variants:,} occur exactly once")
+    err.print(f"[dim]{'; '.join(parts)}[/dim]")
+
+    # A big collapse means the variants are re-orderings of the same work, so
+    # --noise-threshold will disappoint and --top-variants is the right knob.
+    if (
+        summary.distinct_activity_sets
+        and summary.variants >= 2 * summary.distinct_activity_sets
+    ):
+        err.print(
+            f"[dim]{summary.variants:,} variants use only "
+            f"{summary.distinct_activity_sets:,} distinct activity sets -- much of "
+            f"this is concurrency; try --top-variants[/dim]"
+        )
+
+
+def _counts_table(
+    title: str, label: str, counts: dict[str, int], share_of: int | None = None
+) -> Table:
     table = Table(title=title, title_justify="left")
     table.add_column(label, style="cyan", overflow="fold")
     table.add_column("count", justify="right")
+    if share_of:
+        table.add_column("%", justify="right")
+        table.add_column("cum %", justify="right")
+
+    cumulative = 0
     for name, count in counts.items():
-        table.add_row(name, f"{count:,}")
+        if share_of:
+            cumulative += count
+            table.add_row(
+                name,
+                f"{count:,}",
+                f"{count / share_of:.1%}",
+                f"{cumulative / share_of:.1%}",
+            )
+        else:
+            table.add_row(name, f"{count:,}")
     return table
+
+
+def _duration(seconds: float | None) -> str:
+    """Render elapsed seconds compactly: '3d 4h', '12m', '0s'.
+
+    Two units is enough to judge a process by, and keeps the overview table
+    narrow.
+    """
+    if seconds is None:
+        return "-"
+    if seconds < 1:
+        return "0s"
+
+    remaining = int(seconds)
+    units = (("d", 86400), ("h", 3600), ("m", 60), ("s", 1))
+    parts = []
+    for suffix, size in units:
+        value, remaining = divmod(remaining, size)
+        if value:
+            parts.append(f"{value}{suffix}")
+        if len(parts) == 2:
+            break
+    return " ".join(parts) or "0s"
 
 
 def main() -> None:

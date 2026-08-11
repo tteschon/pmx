@@ -44,6 +44,19 @@ activities exist".
   "variants": 6,
   "first_event": "2010-12-30T11:02:00+00:00",
   "last_event":  "2011-01-24T14:56:00+00:00",
+
+  "variants_for_50pct": 2,
+  "variants_for_80pct": 4,
+  "variants_for_95pct": 6,
+  "singleton_variants": 3,
+  "distinct_activity_sets": 5,
+
+  "median_case_duration_seconds": 10800.0,
+  "mean_case_duration_seconds":   51480.0,
+  "p90_case_duration_seconds":    172800.0,
+  "min_case_duration_seconds":    7200.0,
+  "max_case_duration_seconds":    345600.0,
+
   "top_activities":   {"check ticket": 9},
   "start_activities": {"register request": 6},
   "end_activities":   {"pay compensation": 3},
@@ -54,11 +67,22 @@ activities exist".
 Variant keys are activity names joined with ` -> `. `first_event` and
 `last_event` are ISO 8601, or `null` for an empty log.
 
+`variants_for_NNpct` is the **fewest** variants, most frequent first, that
+together account for that share of cases. `variants_for_80pct` is the value to
+pass to `--top-variants`. `distinct_activity_sets` counts variants after
+collapsing re-orderings, so a value well below `variants` means concurrency.
+
+Durations are whole-case elapsed time in **seconds** (`max - min` timestamp per
+case). A single-event case is `0.0`, not `null`; the fields are `null` only when
+the log has no cases. The `-n/--top` flag truncates the `top_*` listings but
+never these scalars.
+
 ## `pmx discover`
 
 ```bash
 pmx discover LOG [-a ALGO] [--notation petri|bpmn] [-o FILE] [-i IMAGE]
                  [--noise-threshold F] [--dependency-threshold F]
+                 [--top-variants N | --min-coverage F]
 ```
 
 | Flag | Default | Meaning |
@@ -69,6 +93,27 @@ pmx discover LOG [-a ALGO] [--notation petri|bpmn] [-o FILE] [-i IMAGE]
 | `-i`, `--image` | none | Also render here (`.png`/`.svg`/`.pdf`) |
 | `--noise-threshold` | `0.0` | Inductive miner only, 0.0-1.0 |
 | `--dependency-threshold` | `0.5` | Heuristics miner only, 0.0-1.0 |
+| `--top-variants` | none | Mine only the N most frequent variants |
+| `--min-coverage` | none | Mine the fewest variants covering this share of cases, 0.0-1.0 |
+
+### Variant filtering
+
+`--top-variants` and `--min-coverage` are mutually exclusive; passing both
+exits 1. They apply to the log *before* mining, so they compose with
+`--noise-threshold` and work with every algorithm and notation. `pmx dfg`
+accepts both flags with the same meaning.
+
+Asking for more variants than the log has is a no-op, not an error.
+
+When a filter removes anything, pmx writes one line to **stderr**:
+
+```
+filtered to 10 of 116 variants (1,260 of 1,434 cases, 87.9%)
+```
+
+stdout still carries only written paths, so piping is unaffected. Report that
+line to the user -- a filtered model describes frequent behaviour, not the
+whole process.
 
 ### Algorithm and notation compatibility
 
@@ -103,17 +148,24 @@ pmx dfg LOG [--json] [-o FILE] [-i IMAGE] [--max-edges N] [--rankdir LR|TB]
 | `--rankdir` | `LR` | Graph direction |
 | `--bgcolor` | `white` | Image background; `transparent` for embedding |
 | `-n`, `--top` | `15` | Edges shown in the terminal table |
+| `--top-variants` | none | Count only the N most frequent variants |
+| `--min-coverage` | none | Count the fewest variants covering this share of cases |
 
 With no `--json`, `-o` or `-i` it prints a table. Every written path goes to
 stdout, one per line, as `discover` does.
 
 ### Exact, unlike everything else here
 
-`dfg` counts the whole log. This matters when comparing against a variant
-list: `pmx inspect -n 25` on `receipt.xes` itemises paths covering 93% of
-cases and mentioning 16 of 27 activities, while `pmx dfg` on the same log
+By default `dfg` counts the whole log. This matters when comparing against a
+variant list: `pmx inspect -n 25` on `receipt.xes` itemises paths covering 93%
+of cases and mentioning 16 of 27 activities, while `pmx dfg` on the same log
 reports all **27 activities and 99 transitions**. Do not present a
 variant-derived transition count as though it were complete.
+
+That exactness is relative to the cases counted, so `--top-variants` and
+`--min-coverage` do change the numbers -- deliberately. The counts stay exact
+for the cases that survive the filter, and pmx names the filter on stderr.
+Without those flags nothing is filtered at all.
 
 `--max-edges` trims the *picture* only -- the JSON always carries every edge.
 Trimming is done by pmx rather than pm4py, because pm4py's own

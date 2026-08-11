@@ -1,9 +1,13 @@
 # pmx
 
+[![CI](https://github.com/tteschon/pmx/actions/workflows/ci.yml/badge.svg)](https://github.com/tteschon/pmx/actions/workflows/ci.yml)
+
 Process discovery from event logs, on the command line. A thin CLI over
 [pm4py](https://github.com/process-intelligence-solutions/pm4py).
 
-Two commands: profile a log, then mine a model from it.
+Profile a log with `inspect`, mine a model from it with `discover`, count
+directly-follows transitions with `dfg`, and handle object-centric logs with
+`pmx ocel`.
 
 ## Install
 
@@ -40,11 +44,26 @@ is 4 MB):
 
 ## Usage
 
-Profile a log -- events, cases, activities, variants, and time span:
+Profile a log -- events, cases, activities, variants, case durations, and how
+concentrated the variants are:
 
 ```bash
 uv run pmx inspect examples/data/running-example.xes
 ```
+
+The variants table carries each variant's share of cases and a running
+cumulative, and `inspect` says outright how many variants you need to account
+for most of the log. On `receipt.xes`:
+
+```
+2 variants cover 50% of cases, 6 cover 80%, 45 cover 95%; 86 occur exactly once
+116 variants use only 50 distinct activity sets -- much of this is concurrency; try --top-variants
+```
+
+That second line is the tell that a log's variant count overstates its
+complexity: when variants collapse to far fewer activity *sets*, they are
+re-orderings of the same work, and `--top-variants` will help where
+`--noise-threshold` will not.
 
 Machine-readable, for piping into `jq`:
 
@@ -83,13 +102,47 @@ the classic baseline and has no tuning knobs.
 | `heuristics` | `--dependency-threshold` (0.0-1.0) | `petri` |
 | `alpha` | none | `petri` |
 
-Raising `--noise-threshold` filters infrequent behaviour, which is the usual
-first move when a discovered model comes out as an unreadable tangle. On
-`receipt.xes` it takes the model from 74 transitions to 66:
+Raising `--noise-threshold` filters infrequent behaviour from inside the miner.
+On `receipt.xes` it takes the model from 74 transitions to 66:
 
 ```bash
 uv run pmx discover examples/data/receipt.xes --noise-threshold 0.2 -o simpler.pnml
 ```
+
+### Making an unreadable model readable
+
+`--noise-threshold` is often not enough, because it cannot remove concurrency.
+Where a log's variants are mostly re-orderings of the same activities, the
+diagram stays wide however high you push it.
+
+Dropping rare variants from the log before mining is the blunter and far more
+effective tool. `--top-variants N` keeps the N most frequent variants;
+`--min-coverage F` keeps the fewest variants covering that share of the cases.
+Both work on `discover` and `dfg`, and they are mutually exclusive.
+
+```bash
+uv run pmx discover examples/data/receipt.xes --top-variants 10 -o model.bpmn --notation bpmn -i model.png
+```
+
+On `receipt.xes` that is the difference between an unreadable tangle and a
+diagram you can actually read:
+
+| Filter | Transitions | Cases kept |
+|---|---|---|
+| none | 74 | 100% |
+| `--noise-threshold 0.2` | 66 | 100% |
+| `--top-variants 10` | 14 | 87.9% |
+| `--top-variants 5` | 9 | 79.6% |
+
+The trade is coverage, not correctness, so pmx reports what it kept on stderr:
+
+```
+filtered to 10 of 116 variants (1,260 of 1,434 cases, 87.9%)
+```
+
+A filtered model is a claim about *frequent* behaviour, not about the whole
+process. `pmx inspect` tells you where to set the threshold -- it reports how
+many variants cover 50%, 80% and 95% of cases.
 
 ### Directly-follows counts
 
@@ -187,6 +240,15 @@ uv add <package>      # dependencies
 ```
 
 `uvx pre-commit install` wires lint, format, and types into every commit.
+Add `--hook-type pre-push` to also run the test suite before a push:
+
+```bash
+uvx pre-commit install --hook-type pre-commit --hook-type pre-push
+```
+
+CI runs the same checks on every push and pull request, across Python
+3.11-3.14 on Linux plus one macOS job. Graphviz is installed there because
+three tests render real images and would fail without it.
 
 ## Licensing
 

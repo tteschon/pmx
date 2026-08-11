@@ -168,3 +168,54 @@ def csv_log(tmp_path: Path) -> Path:
         writer.writeheader()
         writer.writerows(rows)
     return path
+
+
+# (trace, number of cases, hours between consecutive events). Built so every
+# derived number is checkable by hand:
+#
+#   20 cases, 7 variants
+#   1 variant covers 50% of cases, 3 cover 80%, 6 cover 95%
+#   4 variants occur exactly once
+#   the second variant re-orders the first, so 7 variants -> 6 activity sets
+#   durations sort to 7200 x2, 10800 x14, 172800 x3, 345600 x1
+WIDE_TRACES: list[tuple[list[str], int, int]] = [
+    (["a", "b", "c", "d"], 10, 1),
+    (["a", "c", "b", "d"], 4, 1),
+    (["a", "b", "d"], 2, 1),
+    (["a", "x", "d"], 1, 24),
+    (["a", "y", "d"], 1, 24),
+    (["a", "z", "d"], 1, 24),
+    (["a", "b", "c", "d", "e"], 1, 24),
+]
+
+
+@pytest.fixture
+def wide_log(tmp_path: Path) -> Path:
+    """A log with a real variant tail, for coverage and duration statistics.
+
+    `xes_log` has 4 cases and 2 variants, which cannot tell a 50% coverage
+    threshold from an 80% one. This one is still small enough to verify by
+    hand -- see WIDE_TRACES for the numbers it is built to produce.
+    """
+    fields = ["case:concept:name", "concept:name", "time:timestamp"]
+    rows: list[dict[str, str]] = []
+    case_index = 0
+    for trace, repeats, hours in WIDE_TRACES:
+        for _ in range(repeats):
+            for step, activity in enumerate(trace):
+                moment = START + timedelta(days=case_index, hours=step * hours)
+                rows.append(
+                    {
+                        fields[0]: f"case-{case_index}",
+                        fields[1]: activity,
+                        fields[2]: moment.isoformat(),
+                    }
+                )
+            case_index += 1
+
+    path = tmp_path / "wide.csv"
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+    return path

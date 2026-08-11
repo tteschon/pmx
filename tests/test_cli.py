@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,18 @@ from pmx import __version__
 from pmx.cli import app
 
 runner = CliRunner()
+
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def plain(text: str) -> str:
+    """Strip ANSI styling so assertions test content, not colour.
+
+    Rich emits no escapes to a pipe, but honours FORCE_COLOR -- which CI sets
+    -- and then auto-highlights numbers, so `1 of 7 variants` arrives with
+    escapes around each digit and a plain substring check fails.
+    """
+    return _ANSI.sub("", text)
 
 
 def test_version() -> None:
@@ -287,3 +300,116 @@ def test_discover_rejects_an_out_of_range_threshold(xes_log: Path) -> None:
     result = runner.invoke(app, ["discover", str(xes_log), "--noise-threshold", "2"])
 
     assert result.exit_code != 0
+
+
+def test_discover_reports_the_filter_on_stderr_only(
+    wide_log: Path, tmp_path: Path
+) -> None:
+    """A filtered model must never be mistakable for the whole process.
+
+    The note has to reach the user, but stdout stays parseable, so it belongs
+    on stderr alongside the existing "discovered ..." line.
+    """
+    target = tmp_path / "model.pnml"
+
+    result = runner.invoke(
+        app, ["discover", str(wide_log), "--top-variants", "1", "-o", str(target)]
+    )
+
+    assert result.exit_code == 0
+    assert result.stdout.splitlines() == [str(target)]
+    assert "filtered" in plain(result.stderr)
+    assert "1 of 7 variants" in plain(result.stderr)
+    assert "50.0%" in plain(result.stderr)
+
+
+def test_discover_min_coverage_keeps_the_fewest_variants(
+    wide_log: Path, tmp_path: Path
+) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "discover",
+            str(wide_log),
+            "--min-coverage",
+            "0.8",
+            "-o",
+            str(tmp_path / "m.pnml"),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "3 of 7 variants" in plain(result.stderr)
+
+
+def test_variant_filters_are_mutually_exclusive(wide_log: Path, tmp_path: Path) -> None:
+    target = tmp_path / "model.pnml"
+
+    result = runner.invoke(
+        app,
+        [
+            "discover",
+            str(wide_log),
+            "--top-variants",
+            "2",
+            "--min-coverage",
+            "0.8",
+            "-o",
+            str(target),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "mutually exclusive" in plain(result.stderr)
+    assert not target.exists()
+
+
+def test_filtering_shrinks_the_dfg(wide_log: Path) -> None:
+    full = runner.invoke(app, ["dfg", str(wide_log), "--json"])
+    trimmed = runner.invoke(
+        app, ["dfg", str(wide_log), "--json", "--top-variants", "1"]
+    )
+
+    assert full.exit_code == trimmed.exit_code == 0
+    assert len(json.loads(trimmed.stdout)["edges"]) < len(
+        json.loads(full.stdout)["edges"]
+    )
+
+
+def test_inspect_shows_variant_coverage(wide_log: Path) -> None:
+    result = runner.invoke(app, ["inspect", str(wide_log)])
+
+    assert result.exit_code == 0
+    assert "cum %" in plain(result.stdout)
+    assert "3 cover 80%" in plain(result.stderr)
+
+
+def test_inspect_json_carries_the_new_statistics(wide_log: Path) -> None:
+    result = runner.invoke(app, ["inspect", str(wide_log), "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["variants_for_80pct"] == 3
+    assert payload["singleton_variants"] == 4
+    assert payload["distinct_activity_sets"] == 6
+    assert payload["median_case_duration_seconds"] == 10800.0
+
+
+def test_inspect_json_keeps_its_existing_shape(xes_log: Path) -> None:
+    """The dashboard reads these keys; adding fields must not rename any."""
+    payload = json.loads(runner.invoke(app, ["inspect", str(xes_log), "--json"]).stdout)
+
+    assert {
+        "source",
+        "events",
+        "cases",
+        "activities",
+        "variants",
+        "first_event",
+        "last_event",
+        "top_activities",
+        "start_activities",
+        "end_activities",
+        "top_variants",
+    } <= set(payload)
+    assert isinstance(payload["top_variants"], dict)

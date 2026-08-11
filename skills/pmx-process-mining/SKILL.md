@@ -11,9 +11,10 @@ allowed-tools: Bash(uv:*) Bash(pmx:*) Read Glob
 
 # Process mining with pmx
 
-`pmx` is a CLI over [pm4py](https://github.com/process-intelligence-solutions/pm4py)
-with two commands: `inspect` profiles an event log, `discover` mines a process
-model from one.
+`pmx` is a CLI over [pm4py](https://github.com/process-intelligence-solutions/pm4py).
+`inspect` profiles an event log, `discover` mines a process model from one,
+`dfg` counts directly-follows transitions, and `pmx ocel` handles
+object-centric logs.
 
 ## Scope
 
@@ -21,6 +22,7 @@ This skill covers **discovery only**. `pmx` can answer:
 
 - What does this process look like? What are the common paths?
 - How many cases, activities, variants? Over what time span?
+- How long does a case take? (`inspect` reports median/mean/p90/max duration.)
 - Give me a process model as a Petri net or BPMN diagram.
 - How often does one activity directly follow another? (`dfg`)
 - What does a process with no single case id look like? (`ocel`)
@@ -31,11 +33,14 @@ orders, has no case id that is not a distortion. `pmx ocel inspect` quantifies
 that distortion before anything is mined; use it to decide whether flattening
 is defensible at all.
 
-It **cannot** do conformance checking, bottleneck or waiting-time analysis,
-social-network mining, or filtering. If the user asks for those, say so
-plainly rather than approximating with `discover` -- the answer would be
-misleading. `inspect` reports a time span, not per-activity durations, so it
-is not a performance tool.
+It **cannot** do conformance checking, bottleneck or waiting-time analysis, or
+social-network mining. If the user asks for those, say so plainly rather than
+approximating with `discover` -- the answer would be misleading. `inspect`
+reports whole-case durations, not per-activity or waiting times, so it is not
+a performance tool.
+
+It **can** filter by variant (`--top-variants`, `--min-coverage`), which is how
+you make a large log's model readable -- see step 4.
 
 ## Before running anything
 
@@ -66,8 +71,9 @@ readable.
    cases ≈ events means one event per case and nothing to mine. A log with
    one variant is a straight line.
 2. **Report what you found** before mining: the four headline counts, the time
-   span, and the top variants. State the variant count explicitly -- it is
-   what justifies the threshold you pick in step 4.
+   span, case durations, and the top variants. State the variant count and the
+   concentration line (`N variants cover 80% of cases`) explicitly -- they are
+   what justify the filter you pick in step 4.
 3. **Discover, and render.**
 
    ```bash
@@ -84,8 +90,16 @@ readable.
    is missing, still write the model, say the image needs
    `brew install graphviz`, and describe the process from the variant list
    instead.
-4. **Iterate on complexity.** If the model is large, raise
-   `--noise-threshold` and re-run. See
+4. **Iterate on complexity.** If the model is an unreadable tangle, reach for
+   `--top-variants N` (or `--min-coverage 0.8`) *first* -- it is far more
+   effective than `--noise-threshold`, which cannot remove concurrency. Use the
+   concentration line from step 1 to pick N. On `receipt.xes`,
+   `--top-variants 10` takes the model from 74 transitions to 14 while still
+   covering 88% of cases, where `--noise-threshold` only reaches 66.
+
+   **Always tell the user a model was filtered, and to what coverage.** pmx
+   prints this on stderr; pass it on. A filtered model is a claim about
+   frequent behaviour, not about the process. See
    [references/interpreting.md](references/interpreting.md).
 
 ## Commands
@@ -94,7 +108,9 @@ readable.
 pmx inspect LOG [-n TOP] [--json]
 pmx discover LOG [-a ALGO] [--notation petri|bpmn] [-o FILE] [-i IMAGE]
                  [--noise-threshold F] [--dependency-threshold F] [--bgcolor C]
+                 [--top-variants N | --min-coverage F]
 pmx dfg LOG [--json] [-o FILE] [-i IMAGE] [--max-edges N] [--bgcolor C]
+            [--top-variants N | --min-coverage F]
 
 pmx ocel inspect  OCEL [--json] [-n TOP]
 pmx ocel discover OCEL [--notation ocdfg|ocpn] [-i IMAGE]
@@ -150,7 +166,8 @@ landed and do not litter the user's data directory.
 | `rendering needs the Graphviz 'dot' binary` | `-i/--image` without Graphviz | `brew install graphviz` / `apt install graphviz`, or drop `-i` |
 | `can only discover BPMN with the inductive miner` | `--notation bpmn` plus `-a heuristics/alpha` | Drop `-a`, or switch to `--notation petri` |
 | BPMN file has no diagram layout | Graphviz missing; export degrades on purpose | Valid BPMN either way -- install Graphviz only if you need coordinates |
-| Model is an unreadable tangle | Real-world log with many rare paths | Raise `--noise-threshold`; see references/interpreting.md |
+| Model is an unreadable tangle | Real-world log with many rare paths | `--top-variants 10` first, then `--noise-threshold`; see references/interpreting.md |
+| `--top-variants and --min-coverage are mutually exclusive` | Both filters passed | Pass one. `--top-variants` for a fixed size, `--min-coverage` for a fixed share of cases |
 | `pmx: command not found` | `~/.local/bin` not on PATH | Use `~/.local/bin/pmx`, or `uv run --project <path> pmx` |
 
 Every error exits 1 with a one-line message on stderr. Report the message to
