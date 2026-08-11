@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_COLOR: "1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v9
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - name: ruff check
+        run: uv run ruff check src tests
+      - name: ruff format
+        run: uv run ruff format --check src tests
+      - name: ty
+        run: uv run ty check
+
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        # The floor declared in pyproject.toml, plus every version up to the
+        # one pinned in .python-version.
+        python: ["3.11", "3.12", "3.13", "3.14"]
+        include:
+          # One macOS run, because that is where pmx is developed and where
+          # Graphviz is installed differently.
+          - os: macos-latest
+            python: "3.14"
+    steps:
+      - uses: actions/checkout@v7
+
+      # Three tests render real images through pm4py, which shells out to
+      # Graphviz. Without `dot` they fail rather than skip.
+      - name: Install Graphviz (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y graphviz
+      - name: Install Graphviz (macOS)
+        if: runner.os == 'macOS'
+        run: brew install graphviz
+
+      - uses: astral-sh/setup-uv@v9
+        with:
+          enable-cache: true
+
+      - run: uv sync --locked --python ${{ matrix.python }}
+      - run: uv run pytest -q
+
+      # The CLI has to survive being invoked for real, not just imported:
+      # Typer wires its options at import time, so a bad Annotated default
+      # only blows up when a command actually runs.
+      #
+      # Built from a literal here-doc rather than examples/data/, which is
+      # gitignored and absent on a fresh clone.
+      - name: Smoke-test the CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="${RUNNER_TEMP}/smoke.csv"
+          cat > "$log" <<'CSV'
+          case:concept:name,concept:name,time:timestamp
+          c1,register,2026-01-01T09:00:00+00:00
+          c1,check,2026-01-01T10:00:00+00:00
+          c1,archive,2026-01-01T11:00:00+00:00
+          c2,register,2026-01-02T09:00:00+00:00
+          c2,check,2026-01-02T10:00:00+00:00
+          c2,archive,2026-01-02T11:00:00+00:00
+          c3,register,2026-01-03T09:00:00+00:00
+          c3,archive,2026-01-03T10:00:00+00:00
+          CSV
+          uv run pmx --version
+          uv run pmx inspect "$log" --json > "${RUNNER_TEMP}/summary.json"
+          uv run pmx discover "$log" --top-variants 1 \
+            -o "${RUNNER_TEMP}/model.pnml" -i "${RUNNER_TEMP}/model.png"
+          test -s "${RUNNER_TEMP}/model.png"  # proves Graphviz really works

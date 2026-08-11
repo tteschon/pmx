@@ -19,3 +19,17 @@ repos:
     rev: v0.0.64
     hooks:
       - id: ty
+
+  # Runs in the project environment rather than an isolated pre-commit one,
+  # because the suite needs pm4py and the installed `pmx`. On push rather than
+  # on commit: the suite is quick, but it needs Graphviz, and a machine
+  # without it should still be able to commit.
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: uv run pytest -q
+        language: system
+        types: [python]
+        pass_filenames: false
+        stages: [pre-push]

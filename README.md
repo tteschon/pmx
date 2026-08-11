@@ -1,5 +1,7 @@
 # pmx
 
+[![CI](https://github.com/tteschon/pmx/actions/workflows/ci.yml/badge.svg)](https://github.com/tteschon/pmx/actions/workflows/ci.yml)
+
 Process discovery from event logs, on the command line. A thin CLI over
 [pm4py](https://github.com/process-intelligence-solutions/pm4py).
 
@@ -238,6 +240,15 @@ uv add <package>      # dependencies
 ```
 
 `uvx pre-commit install` wires lint, format, and types into every commit.
+Add `--hook-type pre-push` to also run the test suite before a push:
+
+```bash
+uvx pre-commit install --hook-type pre-commit --hook-type pre-push
+```
+
+CI runs the same checks on every push and pull request, across Python
+3.11-3.14 on Linux plus one macOS job. Graphviz is installed there because
+three tests render real images and would fail without it.
 
 ## Licensing
 
