@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,18 @@ from pmx import __version__
 from pmx.cli import app
 
 runner = CliRunner()
+
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def plain(text: str) -> str:
+    """Strip ANSI styling so assertions test content, not colour.
+
+    Rich emits no escapes to a pipe, but honours FORCE_COLOR -- which CI sets
+    -- and then auto-highlights numbers, so `1 of 7 variants` arrives with
+    escapes around each digit and a plain substring check fails.
+    """
+    return _ANSI.sub("", text)
 
 
 def test_version() -> None:
@@ -305,9 +318,9 @@ def test_discover_reports_the_filter_on_stderr_only(
 
     assert result.exit_code == 0
     assert result.stdout.splitlines() == [str(target)]
-    assert "filtered" in result.stderr
-    assert "1 of 7 variants" in result.stderr
-    assert "50.0%" in result.stderr
+    assert "filtered" in plain(result.stderr)
+    assert "1 of 7 variants" in plain(result.stderr)
+    assert "50.0%" in plain(result.stderr)
 
 
 def test_discover_min_coverage_keeps_the_fewest_variants(
@@ -326,7 +339,7 @@ def test_discover_min_coverage_keeps_the_fewest_variants(
     )
 
     assert result.exit_code == 0
-    assert "3 of 7 variants" in result.stderr
+    assert "3 of 7 variants" in plain(result.stderr)
 
 
 def test_variant_filters_are_mutually_exclusive(wide_log: Path, tmp_path: Path) -> None:
@@ -347,7 +360,7 @@ def test_variant_filters_are_mutually_exclusive(wide_log: Path, tmp_path: Path) 
     )
 
     assert result.exit_code == 1
-    assert "mutually exclusive" in result.stderr
+    assert "mutually exclusive" in plain(result.stderr)
     assert not target.exists()
 
 
@@ -367,8 +380,8 @@ def test_inspect_shows_variant_coverage(wide_log: Path) -> None:
     result = runner.invoke(app, ["inspect", str(wide_log)])
 
     assert result.exit_code == 0
-    assert "cum %" in result.stdout
-    assert "3 cover 80%" in result.stderr
+    assert "cum %" in plain(result.stdout)
+    assert "3 cover 80%" in plain(result.stderr)
 
 
 def test_inspect_json_carries_the_new_statistics(wide_log: Path) -> None:
