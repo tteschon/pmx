@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+# No API token: PyPI Trusted Publishing mints a short-lived credential from
+# the OIDC identity below, so there is no secret to store or rotate. The
+# publisher must be registered on PyPI first (project pmx-cli, owner tteschon,
+# repo pmx, workflow release.yml, environment pypi) or this job cannot
+# authenticate.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      # The classic release bug: tag v0.2.0 pushed against a pyproject still
+      # saying 0.1.0, uploading a version nobody can find by tag. Fail here,
+      # before anything reaches PyPI, where it cannot be replaced.
+      - name: Tag matches project version
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          project=$(uv version --short)
+          echo "tag=$tag project=$project"
+          if [ "$tag" != "$project" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match project version $project"
+            exit 1
+          fi
+
+      - run: uv build
+
+      # AGPL distribution obligates offering corresponding source, and the
+      # sdist is how that is satisfied. An sdist without src/ would ship a
+      # licence promise the artifact does not keep.
+      - name: Sdist carries the source
+        run: |
+          set -euo pipefail
+          tar -tzf dist/*.tar.gz | grep -q 'src/pmx/cli.py'
+          tar -tzf dist/*.tar.gz | grep -q 'LICENSE'
+
+      - name: Check metadata renders on PyPI
+        run: uv run --with twine twine check dist/*
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write # required for Trusted Publishing
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@v1.14.2

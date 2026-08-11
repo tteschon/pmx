@@ -9,6 +9,11 @@ wheels/
 # Virtual environments
 .venv
 
+# Coverage data, written by `pytest --cov`
+.coverage
+.coverage.*
+htmlcov/
+
 # Sample logs fetched from the pm4py repo
 examples/data/
 
