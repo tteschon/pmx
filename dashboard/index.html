@@ -286,6 +286,44 @@ textarea {
 .edge-label .arrow { flex: none; }
 .loop { font-style: normal; color: var(--ochre); flex: none; }
 
+/* ── live connector section ─────────────────────────────────────────────── */
+#live[hidden] { display: none !important; }
+.live-head { display: flex; align-items: baseline; gap: .8rem; flex-wrap: wrap; }
+.probe {
+  display: grid; grid-template-columns: minmax(7rem, 11rem) 1fr auto;
+  gap: .75rem; align-items: center; padding: .45rem .2rem;
+  border-bottom: 1px solid var(--hairline);
+}
+@media (max-width: 620px) { .probe { grid-template-columns: minmax(5rem, 8rem) 1fr auto; } }
+.probe:last-child { border-bottom: 0; }
+.probe .otype {
+  font-family: var(--mono); font-size: var(--step--1); color: var(--ink-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.probe .what { font-size: var(--step--1); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.probe .verdict { font-family: var(--mono); font-size: var(--step--1); font-variant-numeric: tabular-nums; text-align: right; }
+.pill {
+  display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap;
+  font-family: var(--mono); font-size: var(--step--1); letter-spacing: .04em;
+  border-radius: 999px; padding: .08rem .5rem; border: 1px solid currentColor;
+}
+.pill.ok      { color: var(--pine);  background: var(--pine-wash); }
+.pill.empty   { color: var(--ochre); background: var(--ochre-wash); }
+.pill.wait    { color: var(--ink-3); }
+.pill.bad     { color: #B3402F; }
+:root[data-theme="dark"] .pill.bad,
+:root:where(:not([data-theme="light"])) .pill.bad { color: #E8907F; }
+.fix { font-size: var(--step--1); color: var(--ink-2); margin: .6rem 0 0; }
+.fix code { font-family: var(--mono); }
+.unchecked {
+  margin-top: 1rem; padding: .75rem .85rem; border-radius: 8px;
+  background: var(--sunken); border: 1px solid var(--rule);
+  font-size: var(--step--1); color: var(--ink-2);
+}
+.unchecked ul { margin: .4rem 0 0; padding-left: 1.1rem; }
+.unchecked li { margin: .15rem 0; }
+.freshness { font-family: var(--mono); font-size: var(--step--1); color: var(--ink-3); }
+
 /* ── tables (the table-view twin) ───────────────────────────────────────── */
 .tablewrap { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-size: var(--step--1); }
@@ -363,6 +401,41 @@ footer p { max-width: 70ch; }
   </section>
 
   <dl class="kpis" id="kpis"></dl>
+
+  <!-- Lit up only when the viewer's Salesforce connector is reachable.
+       Absent everywhere else, including this file opened from disk. -->
+  <section class="card" id="live" hidden>
+    <div class="card-head live-head">
+      <h2>Live from Salesforce</h2>
+      <span class="pill wait" id="live-status">checking…</span>
+      <div class="spacer"></div>
+      <span class="freshness" id="live-fresh"></span>
+    </div>
+    <p class="note">Everything above is mined from a log you exported. This asks your
+    Salesforce org, right now, whether it holds what an object-centric log would need
+    &mdash; and shows the closed-won work that has already triggered provisioning.</p>
+
+    <h3 style="font-family:var(--mono);font-size:var(--step--1);letter-spacing:.1em;
+               text-transform:uppercase;color:var(--ink-3);font-weight:500;margin:1rem 0 .3rem">
+      Can this org feed an OCEL?</h3>
+    <div id="probes"></div>
+
+    <div class="unchecked">
+      <b>Salesforce only.</b> These probes cannot see the joins that actually gate the
+      project, because they live in other systems. Still unverified:
+      <ul>
+        <li>the Salesforce line-item id stored on each platform subscription</li>
+        <li>the Salesforce account id stored on each platform organization</li>
+        <li>a Retool audit trail carrying subscription id and timestamp</li>
+      </ul>
+      All four rows above can read ready while the process is still unminable.
+    </div>
+
+    <h3 style="font-family:var(--mono);font-size:var(--step--1);letter-spacing:.1em;
+               text-transform:uppercase;color:var(--ink-3);font-weight:500;margin:1.4rem 0 .3rem">
+      Closed won, awaiting provisioning</h3>
+    <div id="queue" class="tablewrap"></div>
+  </section>
 
   <!-- HERO: variant runs -->
   <section class="card">
@@ -1096,6 +1169,239 @@ const DATASETS = {"receipt":{"source":"examples/data/receipt.xes","events":8577,
     fitBtn.textContent = on ? "Actual size" : "Fit width";
     document.getElementById("modelbox").classList.toggle("fit", !on);
   });
+
+
+  // ── live connector section ─────────────────────────────────────────────
+  //
+  // Everything here is additive. `claude.use("mcp")` resolves late (never in
+  // this script's first run), resolves null when the view cannot run it, and
+  // `window.claude` does not exist at all when this file is opened from disk.
+  // So the page above is already complete; this only ever adds a section.
+  var SF = "Salesforce SObject Read";
+
+  // One row per prerequisite, each naming the object type it unblocks.
+  var PROBES = [
+    { otype: "opportunity", what: "Closed-won opportunities — the trigger",
+      q: "SELECT COUNT(Id) n FROM Opportunity WHERE StageName = 'Closed Won'" },
+    { otype: "line_item", what: "Opportunity line items — one per provisioned product",
+      q: "SELECT COUNT(Id) n FROM OpportunityLineItem" },
+    { otype: "account", what: "Accounts — drives content-collection rules",
+      q: "SELECT COUNT(Id) n FROM Account" },
+    { otype: "(event source)", what: "Stage history — when Closed Won actually happened",
+      q: "SELECT COUNT(Id) n FROM OpportunityFieldHistory WHERE Field = 'StageName'" }
+  ];
+
+  var QUEUE_Q =
+    "SELECT Id, Name, CloseDate, AccountId FROM Opportunity " +
+    "WHERE StageName = 'Closed Won' ORDER BY CloseDate DESC LIMIT 15";
+
+  // Each code has a different correct response. Collapsing them into one
+  // banner hides the single action that would fix the page.
+  function explain(err) {
+    var code = (err && err.code) || "upstream_error";
+    switch (code) {
+      case "server_not_connected":
+        return { label: "not connected", cls: "bad",
+                 fix: "Add <b>" + SF + "</b> in claude.ai Settings → Connectors." };
+      case "needs_reauth":
+        return { label: "reconnect", cls: "bad",
+                 fix: "Reconnect <b>" + SF + "</b> in claude.ai Settings → Connectors." };
+      case "selection_required":
+        return { label: "choose one", cls: "bad",
+                 fix: "You have more than one connector named <b>" + SF +
+                      "</b>. Pick one when claude.ai asks." };
+      case "not_in_manifest":
+        return { label: "not allowed", cls: "bad",
+                 fix: "This page is not permitted to call " + SF + " in this view." };
+      case "blocked_by_policy":
+        return { label: "blocked", cls: "bad",
+                 fix: "Your organization's policy blocks this tool." };
+      case "approval_required":
+        return { label: "needs approval", cls: "bad",
+                 fix: "Your organization requires per-call approval, which artifacts cannot request yet." };
+      case "tool_error":
+        // A malformed SOQL lands here; the connector's own message is the useful part.
+        return { label: "query failed", cls: "bad",
+                 fix: "Salesforce rejected the query: " + esc(err.message || "no detail given") };
+      case "server_unavailable":
+      case "rate_limited":
+        return { label: "unavailable", cls: "wait", retry: true,
+                 fix: "Salesforce did not answer. This usually clears on its own." };
+      case "not_granted":
+      case "capability_disabled":
+      case "capability_removed":
+        return { label: "unavailable", cls: "wait", fatal: true, fix: "" };
+      default:
+        return { label: "error", cls: "bad",
+                 fix: "Could not reach " + SF + " (" + esc(code) + ")." };
+    }
+  }
+
+  function pill(cls, text) {
+    var s = el("span", "pill " + cls, text);
+    return s;
+  }
+
+  // Freshness comes from the result's own stamp, never Date.now(): a replayed
+  // cache entry was produced earlier than this moment.
+  function stamp(result) {
+    var c = result && result.cache;
+    if (!c || !c.storedAt) return "";
+    var d = new Date(c.storedAt);
+    if (isNaN(d)) return "";
+    return "as of " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) +
+           (c.revalidating ? " · refreshing" : "");
+  }
+
+  function firstCount(payload) {
+    // Aggregates come back as records[0].<alias> with type AggregateResult.
+    if (!payload || !Array.isArray(payload.records) || !payload.records.length) return null;
+    var row = payload.records[0];
+    for (var k in row) {
+      if (k !== "attributes" && typeof row[k] === "number") return row[k];
+    }
+    return null;
+  }
+
+  function startLive(mcp) {
+    var live = document.getElementById("live");
+    var status = document.getElementById("live-status");
+    var fresh = document.getElementById("live-fresh");
+    var host = document.getElementById("probes");
+    live.hidden = false;
+
+    // Adapt to what the viewer actually has before calling anything.
+    mcp.listTools(SF).then(function (res) {
+      var server = (res.servers || [])[0];
+      if (!server || !server.tools || !server.tools.length) {
+        status.className = "pill bad";
+        status.textContent = "not connected";
+        host.textContent = "";
+        var p = el("p", "fix");
+        p.innerHTML = "Add <b>" + SF + "</b> in claude.ai Settings → Connectors, then reload.";
+        host.appendChild(p);
+        document.getElementById("queue").textContent = "";
+        return;
+      }
+      status.className = "pill ok";
+      status.textContent = SF;
+      runProbes(mcp, host, fresh);
+      runQueue(mcp);
+    }).catch(function (err) {
+      var e = explain(err);
+      status.className = "pill " + e.cls;
+      status.textContent = e.label;
+      if (e.fix) {
+        var p = el("p", "fix"); p.innerHTML = e.fix; host.appendChild(p);
+      }
+    });
+  }
+
+  function runProbes(mcp, host, fresh) {
+    host.textContent = "";
+    // Shared notice area. Several probes failing the same way is ONE page-level
+    // condition, not four copies of the same sentence, so notes dedupe by code.
+    var notices = el("div");
+    var seen = {};
+    function notice(key, html) {
+      if (seen[key]) return;
+      seen[key] = 1;
+      var p = el("p", "fix");
+      p.innerHTML = html;
+      notices.appendChild(p);
+      if (!notices.parentNode) host.appendChild(notices);
+    }
+
+    PROBES.forEach(function (probe) {
+      var row = el("div", "probe");
+      row.appendChild(el("div", "otype", probe.otype));
+      row.appendChild(el("div", "what", probe.what));
+      var verdict = el("div", "verdict");
+      verdict.appendChild(pill("wait", "checking…"));
+      row.appendChild(verdict);
+      host.appendChild(row);
+
+      var retried = false;
+      function watch() {
+        mcp.watchTool(SF, "soqlQuery", { q: probe.q }, function (ev) {
+          if (ev.type === "data") {
+            var n = firstCount(ev.result && ev.result.payload);
+            verdict.textContent = "";
+            if (n === null) {
+              verdict.appendChild(pill("bad", "no answer"));
+            } else if (n > 0) {
+              verdict.appendChild(pill("ok", n.toLocaleString("en-US") + " rows"));
+            } else {
+              // Empty is the true state, not a failure — and the whole point.
+              verdict.appendChild(pill("empty", "empty"));
+              notice("empty:" + probe.otype,
+                     "<b>" + esc(probe.otype) + "</b> has no rows in this org, so it " +
+                     "cannot contribute events to an OCEL yet.");
+            }
+            var f = stamp(ev.result);
+            if (f) fresh.textContent = f;
+          } else {
+            var e = explain(ev.error);
+            // Authz denials retract data; transient ones keep the last good value.
+            verdict.textContent = "";
+            verdict.appendChild(pill(e.cls, e.label));
+            if (e.fix) notice("err:" + ((ev.error && ev.error.code) || "?"), e.fix);
+            if (e.retry && !retried) {
+              retried = true;
+              var wait = (ev.error && ev.error.retryAfterMs) || (2000 + Math.random() * 3000);
+              setTimeout(watch, Math.min(wait, 60000));
+            }
+          }
+        }, { refetchInterval: 300000 });
+      }
+      watch();
+    });
+  }
+
+  function runQueue(mcp) {
+    var host = document.getElementById("queue");
+    host.textContent = "";
+    var placeholder = el("p", "fix", "Loading closed-won opportunities…");
+    host.appendChild(placeholder);
+
+    mcp.watchTool(SF, "soqlQuery", { q: QUEUE_Q }, function (ev) {
+      host.textContent = "";
+      if (ev.type === "error") {
+        var e = explain(ev.error);
+        var p = el("p", "fix");
+        p.innerHTML = e.fix || ("Could not load the queue (" + esc(e.label) + ").");
+        host.appendChild(p);
+        return;
+      }
+      var payload = ev.result && ev.result.payload;
+      var rows = (payload && payload.records) || [];
+      if (!rows.length) {
+        host.appendChild(el("p", "fix", "No closed-won opportunities in this org."));
+        return;
+      }
+      var t = el("table");
+      t.innerHTML = "<thead><tr><th>Opportunity</th><th>Closed</th>" +
+                    "<th>Account</th></tr></thead>";
+      var tb = el("tbody");
+      rows.forEach(function (r) {
+        var tr = el("tr");
+        tr.innerHTML = "<td>" + esc(r.Name || r.Id) + "</td>" +
+                       "<td class='n'>" + esc(r.CloseDate || "—") + "</td>" +
+                       "<td class='seq'>" + esc(r.AccountId || "—") + "</td>";
+        tb.appendChild(tr);
+      });
+      t.appendChild(tb);
+      host.appendChild(t);
+    }, { refetchInterval: 300000 });
+  }
+
+  // Never blocks first paint, and simply never fires when unavailable.
+  if (typeof window !== "undefined" && window.claude && window.claude.use) {
+    window.claude.use("mcp").then(function (mcp) {
+      if (mcp) startLive(mcp);
+    }).catch(function () { /* stay hidden */ });
+  }
+
 
   current = DATASETS[currentKey];
   render();
