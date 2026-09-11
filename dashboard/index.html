@@ -324,6 +324,33 @@ textarea {
 .unchecked li { margin: .15rem 0; }
 .freshness { font-family: var(--mono); font-size: var(--step--1); color: var(--ink-3); }
 
+.probe { grid-template-columns: minmax(7rem, 10rem) minmax(8rem, 1fr) minmax(9rem, 12rem) auto; }
+@media (max-width: 760px) {
+  .probe { grid-template-columns: minmax(5rem, 8rem) 1fr auto; }
+  .probe .what { display: none; }
+}
+.objpick { display: flex; align-items: center; gap: .3rem; min-width: 0; }
+.objpick select, .objpick input {
+  font-family: var(--mono); font-size: var(--step--1); color: var(--ink);
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 6px;
+  padding: .18rem .35rem; min-width: 0; width: 100%;
+}
+.objpick input.invalid { border-color: #B3402F; }
+.objpick button {
+  font-family: var(--mono); font-size: var(--step--1); background: none;
+  border: 1px solid var(--rule); border-radius: 6px; color: var(--ink-3);
+  padding: .18rem .4rem; cursor: pointer; flex: none;
+}
+.objpick button:hover { border-color: var(--pine); color: var(--pine); }
+.connect {
+  font-family: var(--sans); font-size: var(--step-0); color: var(--surface);
+  background: var(--pine); border: 1px solid var(--pine); border-radius: 7px;
+  padding: .4rem .9rem; cursor: pointer;
+}
+.connect:hover { filter: brightness(1.08); }
+.gate { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; margin: .2rem 0 1rem; }
+.gate p { margin: 0; font-size: var(--step--1); color: var(--ink-2); max-width: 52ch; }
+
 /* ── tables (the table-view twin) ───────────────────────────────────────── */
 .tablewrap { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-size: var(--step--1); }
@@ -415,9 +442,18 @@ footer p { max-width: 70ch; }
     Salesforce org, right now, whether it holds what an object-centric log would need
     &mdash; and shows the closed-won work that has already triggered provisioning.</p>
 
+    <div class="gate" id="gate" hidden>
+      <button class="connect" id="connect">Connect Salesforce</button>
+      <p id="gate-copy"></p>
+    </div>
+
     <h3 style="font-family:var(--mono);font-size:var(--step--1);letter-spacing:.1em;
                text-transform:uppercase;color:var(--ink-3);font-weight:500;margin:1rem 0 .3rem">
-      Can this org feed an OCEL?</h3>
+      Can this org feed an OCEL?
+      <button class="toggle" id="resetmap" style="margin-left:.6rem">Reset mapping</button></h3>
+    <p class="note" id="map-note" style="margin:.2rem 0 .6rem">Each row counts one Salesforce
+    object. Point them at whichever objects actually hold your data &mdash; custom objects
+    included &mdash; and the check answers for <em>your</em> schema, not the standard one.</p>
     <div id="probes"></div>
 
     <div class="unchecked">
@@ -1179,17 +1215,87 @@ const DATASETS = {"receipt":{"source":"examples/data/receipt.xes","events":8577,
   // So the page above is already complete; this only ever adds a section.
   var SF = "Salesforce SObject Read";
 
-  // One row per prerequisite, each naming the object type it unblocks.
-  var PROBES = [
-    { otype: "opportunity", what: "Closed-won opportunities — the trigger",
-      q: "SELECT COUNT(Id) n FROM Opportunity WHERE StageName = 'Closed Won'" },
-    { otype: "line_item", what: "Opportunity line items — one per provisioned product",
-      q: "SELECT COUNT(Id) n FROM OpportunityLineItem" },
-    { otype: "account", what: "Accounts — drives content-collection rules",
-      q: "SELECT COUNT(Id) n FROM Account" },
-    { otype: "(event source)", what: "Stage history — when Closed Won actually happened",
-      q: "SELECT COUNT(Id) n FROM OpportunityFieldHistory WHERE Field = 'StageName'" }
+  // One row per prerequisite. `object` is the SObject counted, and is the
+  // viewer's to change -- the standard names below are only a starting guess,
+  // and a platform that keeps subscriptions in a custom object needs its own.
+  var PROBE_DEFS = [
+    { key: "opportunity", otype: "opportunity",
+      what: "The trigger — closed-won deals",
+      object: "Opportunity", where: "StageName = 'Closed Won'" },
+    { key: "line_item", otype: "line_item",
+      what: "One per provisioned product",
+      object: "OpportunityLineItem", where: null },
+    { key: "account", otype: "account",
+      what: "Drives content-collection rules",
+      object: "Account", where: null },
+    { key: "history", otype: "(event source)",
+      what: "When Closed Won actually happened",
+      object: "OpportunityFieldHistory", where: "Field = 'StageName'" }
   ];
+
+  // A Salesforce API name. The value is interpolated into SOQL, so anything
+  // that is not an identifier is refused here rather than sent and rejected
+  // upstream as an opaque MALFORMED_QUERY.
+  var API_NAME = /^[A-Za-z][A-Za-z0-9_]*$/;
+
+  var MAP_KEY = "pmx.sf.objectmap.v1";
+
+  // localStorage throws outright in some contexts (private windows, thumbnail
+  // capture), so every touch is guarded and absence is a valid answer.
+  function loadMap() {
+    try {
+      var raw = window.localStorage.getItem(MAP_KEY);
+      return raw ? (JSON.parse(raw) || {}) : {};
+    } catch (e) { return {}; }
+  }
+  function saveMap(m) {
+    try { window.localStorage.setItem(MAP_KEY, JSON.stringify(m)); } catch (e) { /* fine */ }
+  }
+  function clearMap() {
+    try { window.localStorage.removeItem(MAP_KEY); } catch (e) { /* fine */ }
+  }
+
+  // In-memory is the source of truth; localStorage only makes it survive a
+  // reload. Storage is unavailable in plenty of ordinary contexts (private
+  // windows, opaque origins), and there a mapping change must still take
+  // effect rather than silently snapping back to the default.
+  var objectMap = null;
+
+  function currentMap() {
+    if (objectMap === null) objectMap = loadMap();
+    return objectMap;
+  }
+
+  function setMapping(key, value) {
+    currentMap()[key] = value;
+    saveMap(objectMap);          // best effort; absence is fine
+  }
+
+  function resetMapping() {
+    objectMap = {};
+    clearMap();
+  }
+
+  function probes() {
+    var saved = currentMap();
+    return PROBE_DEFS.map(function (d) {
+      var obj = saved[d.key];
+      return {
+        key: d.key, otype: d.otype, what: d.what, where: d.where,
+        object: (typeof obj === "string" && API_NAME.test(obj)) ? obj : d.object,
+        isDefault: !(typeof obj === "string" && API_NAME.test(obj) && obj !== d.object)
+      };
+    });
+  }
+
+  function countQuery(probe) {
+    return "SELECT COUNT(Id) n FROM " + probe.object +
+           (probe.where ? " WHERE " + probe.where : "");
+  }
+
+  var DISCOVER_Q =
+    "SELECT QualifiedApiName, Label FROM EntityDefinition " +
+    "WHERE IsQueryable = true ORDER BY QualifiedApiName LIMIT 500";
 
   var QUEUE_Q =
     "SELECT Id, Name, CloseDate, AccountId FROM Opportunity " +
@@ -1263,14 +1369,76 @@ const DATASETS = {"receipt":{"source":"examples/data/receipt.xes","events":8577,
     return null;
   }
 
-  function startLive(mcp) {
+  // Discovered SObject names, or null while unknown / when discovery is denied.
+  var catalog = null;
+  var watchers = [];
+
+  function dropWatchers() {
+    watchers.forEach(function (u) { try { u(); } catch (e) { /* already gone */ } });
+    watchers = [];
+  }
+
+  function startLive(mcp, perms) {
     var live = document.getElementById("live");
     var status = document.getElementById("live-status");
-    var fresh = document.getElementById("live-fresh");
     var host = document.getElementById("probes");
     live.hidden = false;
 
-    // Adapt to what the viewer actually has before calling anything.
+    // state() never prompts, so the panel can describe itself before anything runs.
+    // use("mcp") resolving non-null is the availability gate, so a permissions
+    // read that fails must not retract the section -- we simply do not know the
+    // consent state, and "prompt" is the honest fallback: the button is offered
+    // and the first call asks. Same for a runtime with no permissions namespace.
+    var read = perms
+      ? perms.state("mcp:" + SF).catch(function () { return "prompt"; })
+      : Promise.resolve("prompt");
+
+    read.then(function (st) {
+      if (st === "granted") return connected(mcp);
+      if (st === "denied") {
+        status.className = "pill bad";
+        status.textContent = "declined";
+        showGate(null, "You declined access for this page load. Reload the page to be " +
+                       "asked again.");
+        return;
+      }
+      if (st === "unavailable") {
+        live.hidden = true;
+        return;
+      }
+      // "prompt" — ask on a click rather than ambushing them with a dialog.
+      status.className = "pill wait";
+      status.textContent = "not connected";
+      renderProbeRows(host, null);
+      showGate(function () {
+        // request() never rejects on "no"; branch on the returned state.
+        perms.request(["mcp:" + SF]).then(function (map) {
+          var after = map && map["mcp:" + SF];
+          if (after === "granted") { hideGate(); return connected(mcp); }
+          status.className = "pill bad";
+          status.textContent = "declined";
+          // A denial is final for this load: asking again shows no dialog, so
+          // offer a reload rather than a button that silently does nothing.
+          showGate(null, "Access was declined. Reload the page to be asked again.");
+        });
+      }, "This page reads your Salesforce org with your own credentials to check " +
+         "whether it can feed an object-centric log. Nothing is written.");
+    });
+  }
+
+  function showGate(onClick, copy) {
+    var gate = document.getElementById("gate");
+    var btn = document.getElementById("connect");
+    document.getElementById("gate-copy").textContent = copy || "";
+    gate.hidden = false;
+    btn.hidden = !onClick;
+    btn.onclick = onClick || null;
+  }
+  function hideGate() { document.getElementById("gate").hidden = true; }
+
+  function connected(mcp) {
+    var status = document.getElementById("live-status");
+    var host = document.getElementById("probes");
     mcp.listTools(SF).then(function (res) {
       var server = (res.servers || [])[0];
       if (!server || !server.tools || !server.tools.length) {
@@ -1285,77 +1453,150 @@ const DATASETS = {"receipt":{"source":"examples/data/receipt.xes","events":8577,
       }
       status.className = "pill ok";
       status.textContent = SF;
-      runProbes(mcp, host, fresh);
-      runQueue(mcp);
+      hideGate();
+      discover(mcp).then(function () {
+        runProbes(mcp);
+        runQueue(mcp);
+      });
     }).catch(function (err) {
       var e = explain(err);
       status.className = "pill " + e.cls;
       status.textContent = e.label;
-      if (e.fix) {
-        var p = el("p", "fix"); p.innerHTML = e.fix; host.appendChild(p);
-      }
+      if (e.fix) { var p = el("p", "fix"); p.innerHTML = e.fix; host.appendChild(p); }
     });
   }
 
-  function runProbes(mcp, host, fresh) {
+  // EntityDefinition often needs View Setup. A refusal is an ordinary outcome:
+  // the controls fall back to free text rather than going dead.
+  function discover(mcp) {
+    return mcp.callTool(SF, "soqlQuery", { q: DISCOVER_Q },
+                        { cache: { staleTime: 300000 } })
+      .then(function (res) {
+        var rows = (res && res.payload && res.payload.records) || [];
+        var names = rows.map(function (r) { return r.QualifiedApiName; })
+                        .filter(function (n) { return typeof n === "string" && API_NAME.test(n); });
+        catalog = names.length ? names : null;
+      })
+      .catch(function () { catalog = null; });
+  }
+
+  function renderProbeRows(host, mcp) {
+    dropWatchers();
     host.textContent = "";
-    // Shared notice area. Several probes failing the same way is ONE page-level
-    // condition, not four copies of the same sentence, so notes dedupe by code.
     var notices = el("div");
     var seen = {};
     function notice(key, html) {
       if (seen[key]) return;
       seen[key] = 1;
-      var p = el("p", "fix");
-      p.innerHTML = html;
-      notices.appendChild(p);
+      var n = el("p", "fix");
+      n.innerHTML = html;
+      notices.appendChild(n);
       if (!notices.parentNode) host.appendChild(notices);
     }
 
-    PROBES.forEach(function (probe) {
+    var list = probes();
+    document.getElementById("resetmap").hidden = list.every(function (p) { return p.isDefault; });
+
+    list.forEach(function (probe) {
       var row = el("div", "probe");
       row.appendChild(el("div", "otype", probe.otype));
       row.appendChild(el("div", "what", probe.what));
+      row.appendChild(objectPicker(probe, host));
+
       var verdict = el("div", "verdict");
-      verdict.appendChild(pill("wait", "checking…"));
+      verdict.appendChild(pill("wait", mcp ? "checking…" : "idle"));
       row.appendChild(verdict);
       host.appendChild(row);
 
-      var retried = false;
-      function watch() {
-        mcp.watchTool(SF, "soqlQuery", { q: probe.q }, function (ev) {
-          if (ev.type === "data") {
-            var n = firstCount(ev.result && ev.result.payload);
-            verdict.textContent = "";
-            if (n === null) {
-              verdict.appendChild(pill("bad", "no answer"));
-            } else if (n > 0) {
-              verdict.appendChild(pill("ok", n.toLocaleString("en-US") + " rows"));
-            } else {
-              // Empty is the true state, not a failure — and the whole point.
-              verdict.appendChild(pill("empty", "empty"));
-              notice("empty:" + probe.otype,
-                     "<b>" + esc(probe.otype) + "</b> has no rows in this org, so it " +
-                     "cannot contribute events to an OCEL yet.");
-            }
-            var f = stamp(ev.result);
-            if (f) fresh.textContent = f;
-          } else {
-            var e = explain(ev.error);
-            // Authz denials retract data; transient ones keep the last good value.
-            verdict.textContent = "";
-            verdict.appendChild(pill(e.cls, e.label));
-            if (e.fix) notice("err:" + ((ev.error && ev.error.code) || "?"), e.fix);
-            if (e.retry && !retried) {
-              retried = true;
-              var wait = (ev.error && ev.error.retryAfterMs) || (2000 + Math.random() * 3000);
-              setTimeout(watch, Math.min(wait, 60000));
-            }
-          }
-        }, { refetchInterval: 300000 });
-      }
-      watch();
+      if (mcp) watchProbe(mcp, probe, verdict, notice);
     });
+  }
+
+  function objectPicker(probe, host) {
+    var wrap = el("div", "objpick");
+    var control;
+    if (catalog) {
+      control = document.createElement("select");
+      var names = catalog.indexOf(probe.object) >= 0 ? catalog : [probe.object].concat(catalog);
+      names.forEach(function (n) {
+        var o = document.createElement("option");
+        o.value = n; o.textContent = n;
+        control.appendChild(o);
+      });
+      control.value = probe.object;
+    } else {
+      control = document.createElement("input");
+      control.type = "text";
+      control.value = probe.object;
+      control.spellcheck = false;
+    }
+    control.setAttribute("aria-label", "Salesforce object counted for " + probe.otype);
+
+    function commit() {
+      var value = String(control.value || "").trim();
+      if (!API_NAME.test(value)) {
+        control.classList.add("invalid");
+        control.title = "Not a Salesforce API name — letters, digits and underscores only.";
+        return;
+      }
+      control.classList.remove("invalid");
+      control.title = "";
+      if (value === probe.object) return;
+      setMapping(probe.key, value);
+      rerender();
+    }
+    control.addEventListener("change", commit);
+    if (control.tagName === "INPUT") {
+      control.addEventListener("keydown", function (e) { if (e.key === "Enter") commit(); });
+    }
+    wrap.appendChild(control);
+    return wrap;
+  }
+
+  var liveMcp = null;
+  function rerender() {
+    renderProbeRows(document.getElementById("probes"), liveMcp);
+  }
+
+  function watchProbe(mcp, probe, verdict, notice) {
+    var retried = false;
+    function go() {
+      var un = mcp.watchTool(SF, "soqlQuery", { q: countQuery(probe) }, function (ev) {
+        if (ev.type === "data") {
+          var n = firstCount(ev.result && ev.result.payload);
+          verdict.textContent = "";
+          if (n === null) {
+            verdict.appendChild(pill("bad", "no answer"));
+          } else if (n > 0) {
+            verdict.appendChild(pill("ok", n.toLocaleString("en-US") + " rows"));
+          } else {
+            verdict.appendChild(pill("empty", "empty"));
+            notice("empty:" + probe.key,
+                   "<b>" + esc(probe.object) + "</b> has no rows, so <b>" +
+                   esc(probe.otype) + "</b> cannot contribute events to an OCEL yet.");
+          }
+          var f = stamp(ev.result);
+          if (f) document.getElementById("live-fresh").textContent = f;
+        } else {
+          var e = explain(ev.error);
+          verdict.textContent = "";
+          verdict.appendChild(pill(e.cls, e.label));
+          if (e.fix) notice("err:" + ((ev.error && ev.error.code) || "?"), e.fix);
+          if (e.retry && !retried) {
+            retried = true;
+            var wait = (ev.error && ev.error.retryAfterMs) || (2000 + Math.random() * 3000);
+            setTimeout(go, Math.min(wait, 60000));
+          }
+        }
+      }, { refetchInterval: 300000 });
+      watchers.push(un);
+    }
+    go();
+  }
+
+  function runProbes(mcp) {
+    liveMcp = mcp;
+    renderProbeRows(document.getElementById("probes"), mcp);
   }
 
   function runQueue(mcp) {
@@ -1395,10 +1636,20 @@ const DATASETS = {"receipt":{"source":"examples/data/receipt.xes","events":8577,
     }, { refetchInterval: 300000 });
   }
 
+  document.getElementById("resetmap").addEventListener("click", function () {
+    resetMapping();
+    rerender();
+  });
+
   // Never blocks first paint, and simply never fires when unavailable.
+  // use("mcp") resolving non-null is the availability gate; the permission
+  // state only decides whether to ask now or on a click.
   if (typeof window !== "undefined" && window.claude && window.claude.use) {
-    window.claude.use("mcp").then(function (mcp) {
-      if (mcp) startLive(mcp);
+    Promise.all([
+      window.claude.use("mcp").catch(function () { return null; }),
+      window.claude.use("permissions").catch(function () { return null; })
+    ]).then(function (both) {
+      if (both[0]) startLive(both[0], both[1]);
     }).catch(function () { /* stay hidden */ });
   }
 
