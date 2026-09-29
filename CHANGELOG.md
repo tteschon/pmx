@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-08-11
+## [0.2.0] - 2026-09-28
 
 First public release.
 
@@ -36,7 +36,11 @@ First public release.
 - `pmx ocel` — object-centric mining: `inspect` (with convergence and
   divergence diagnostics), `discover` (OC-DFG and OC-PN), and `flatten`.
 - A self-contained HTML dashboard, and a Claude Code agent skill under
-  `skills/`.
+  `skills/`. The dashboard reads `inspect --json` and `dfg --json` output,
+  and can mine connected applications directly through a Salesforce
+  capability, with an explicit consent step and configurable object
+  mapping. Neither the dashboard nor the skill ships in the installed
+  package -- both live in the repository.
 
 ### Notes
 
@@ -52,5 +56,5 @@ First public release.
   which is AGPL v3. See the Licensing section of the README before
   distributing this or putting it behind a network service.
 
-[Unreleased]: https://github.com/tteschon/pmx/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/tteschon/pmx/releases/tag/v0.1.0
+[Unreleased]: https://github.com/tteschon/pmx/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/tteschon/pmx/releases/tag/v0.2.0

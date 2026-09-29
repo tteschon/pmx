@@ -4,7 +4,7 @@
 # a user types stay `pmx`; only the install name differs. `pmx.__init__` reads
 # the version by *distribution* name, so it says "pmx-cli" too.
 name = "pmx-cli"
-version = "0.1.0"
+version = "0.2.0"
 description = "Process discovery from event logs, built on pm4py."
 readme = "README.md"
 # AGPL because pmx links pm4py, which is AGPL v3. See the Licensing section
