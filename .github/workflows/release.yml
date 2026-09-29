@@ -1,14 +1,27 @@
 name: Release
 
 on:
+  # A v* tag is the real thing and always goes to PyPI.
   push:
     tags: ["v*"]
+  # Run by hand to rehearse against TestPyPI, so the first real upload is not
+  # also the first time this pipeline has ever run end to end.
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Registry to publish to"
+        type: choice
+        options: ["testpypi", "pypi"]
+        default: "testpypi"
 
-# No API token: PyPI Trusted Publishing mints a short-lived credential from
-# the OIDC identity below, so there is no secret to store or rotate. The
-# publisher must be registered on PyPI first (project pmx-cli, owner tteschon,
-# repo pmx, workflow release.yml, environment pypi) or this job cannot
-# authenticate.
+# No API token: Trusted Publishing mints a short-lived credential from the
+# OIDC identity below, so there is no secret to store or rotate. Each registry
+# needs its own publisher registered before it will accept an upload:
+#
+#   PyPI      pypi.org/manage/account/publishing/       environment: pypi
+#   TestPyPI  test.pypi.org/manage/account/publishing/  environment: testpypi
+#
+# Both take project pmx-cli, owner tteschon, repo pmx, workflow release.yml.
 permissions:
   contents: read
 
@@ -24,7 +37,11 @@ jobs:
       # The classic release bug: tag v0.2.0 pushed against a pyproject still
       # saying 0.1.0, uploading a version nobody can find by tag. Fail here,
       # before anything reaches PyPI, where it cannot be replaced.
+      #
+      # Only meaningful for a tag: on a manual run GITHUB_REF_NAME is the
+      # branch, which has no version to agree with.
       - name: Tag matches project version
+        if: github.event_name == 'push'
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME#v}"
@@ -57,7 +74,9 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
-    environment: pypi
+    # A tag always means PyPI; a manual run goes wherever it was asked to.
+    environment:
+      name: ${{ github.event_name == 'push' && 'pypi' || inputs.target }}
     permissions:
       id-token: write # required for Trusted Publishing
     steps:
@@ -65,4 +84,11 @@ jobs:
         with:
           name: dist
           path: dist/
+
       - uses: pypa/gh-action-pypi-publish@v1.14.2
+        with:
+          repository-url: ${{ (github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi') && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
+          # Rehearsals get re-run against a version TestPyPI already holds, and
+          # that is fine. A real release must never pass silently over a
+          # version that is already on PyPI.
+          skip-existing: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi' }}
