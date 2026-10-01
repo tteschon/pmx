@@ -60,8 +60,14 @@ jobs:
       - name: Sdist carries the source
         run: |
           set -euo pipefail
-          tar -tzf dist/*.tar.gz | grep -q 'src/pmx/cli.py'
-          tar -tzf dist/*.tar.gz | grep -q 'LICENSE'
+          # List once into a variable rather than piping into `grep -q`.
+          # grep -q exits at the first match and closes the pipe, and GNU tar
+          # then dies with "stdout: write error", which pipefail turns into a
+          # failed step. bsdtar on macOS ignores it, so the pipe version looks
+          # fine locally and only breaks on the runner.
+          listing=$(tar -tzf dist/*.tar.gz)
+          grep -q 'src/pmx/cli.py' <<<"$listing"
+          grep -q 'LICENSE' <<<"$listing"
 
       - name: Check metadata renders on PyPI
         run: uv run --with twine twine check dist/*
