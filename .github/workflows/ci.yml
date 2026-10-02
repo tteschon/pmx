@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # Weekly, so a new pm4py release is caught even when nobody pushes.
+  schedule:
+    - cron: "0 9 * * 1"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -97,6 +100,54 @@ jobs:
           CSV
           uv run pmx --version
           uv run pmx inspect "$log" --json > "${RUNNER_TEMP}/summary.json"
+          # stdout must be pure JSON. CliRunner tests can't see output that
+          # bypasses sys.stdout, such as an import-time banner from pm4py.
+          uv run python -m json.tool "${RUNNER_TEMP}/summary.json" > /dev/null
           uv run pmx discover "$log" --top-variants 1 \
             -o "${RUNNER_TEMP}/model.pnml" -i "${RUNNER_TEMP}/model.png"
           test -s "${RUNNER_TEMP}/model.png"  # proves Graphviz really works
+
+  # The `test` job runs the pm4py pinned in uv.lock, but `uv tool install`
+  # ignores the lock and resolves the newest pm4py -- which is what users
+  # actually run. This job tests that version. pm4py ships behaviour changes
+  # in four-part releases (2.7.23.x), so a version ceiling would not help.
+  #
+  # Keep this out of the required checks: it can go red because of an
+  # upstream release, not because of the PR it happens to run on.
+  pm4py-latest:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Graphviz
+        run: sudo apt-get update && sudo apt-get install -y graphviz
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      # Not --locked: upgrade pm4py past the lock, leaving everything else
+      # pinned so a failure points at pm4py.
+      - run: uv sync --upgrade-package pm4py
+      - name: pm4py version
+        run: uv run python -c "import pm4py; print(pm4py.__version__)" 2>/dev/null
+      - run: uv run pytest -q
+
+      # Only the weekly run files an issue; a PR's failure already shows on
+      # the PR. One open issue at a time -- later failures comment on it.
+      - name: Report a scheduled failure
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(uv run python -c "import pm4py; print(pm4py.__version__)" 2>/dev/null || echo unknown)
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          title="Tests fail against the newest pm4py"
+          body="The weekly run against pm4py ${version} failed: ${run_url}"
+          existing=$(gh issue list --state open --search "\"${title}\" in:title" --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi

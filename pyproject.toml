@@ -82,6 +82,14 @@ testpaths = ["tests"]
 # No --cov here: coverage is measured in CI, and putting it in addopts makes
 # every local run pay for instrumentation.
 addopts = "-ra"
+# pm4py deprecates before it removes, so a deprecation is the early warning
+# that a call pmx relies on is going away. Not filtered to `:pm4py`: the
+# module field matches where the warning is attributed, and pm4py's
+# stacklevel attributes it to the caller -- pmx -- not to pm4py itself.
+filterwarnings = [
+    "error::DeprecationWarning",
+    "error::FutureWarning",
+]
 
 [tool.coverage.run]
 source = ["src/pmx"]
