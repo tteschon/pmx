@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- CI now also tests against the newest pm4py, not just the version pinned in
+  `uv.lock`. `uv tool install` ignores the lock, so the newest pm4py is what
+  users actually run. The job runs on every push and pull request and weekly
+  on its own, filing an issue when the weekly run fails.
+- `DeprecationWarning` and `FutureWarning` now fail the test suite, so a
+  pm4py call that is going away surfaces while it still works.
+- The CI smoke test parses `pmx inspect --json` output, catching anything
+  that writes to stdout outside the test runner's capture.
+
 ## [0.2.0] - 2026-09-28
 
 First public release.

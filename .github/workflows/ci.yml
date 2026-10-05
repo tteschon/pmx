@@ -5,7 +5,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
-  # Weekly, so a new pm4py release is caught even when nobody pushes.
+  # Weekly, so a new pm4py release is caught even when nobody pushes. Only
+  # pm4py-latest runs on it; the pinned jobs would repeat last week's result.
+  # GitHub disables schedules on a public repo after 60 days without
+  # activity, so a quiet stretch can mean this stopped running, not that
+  # pm4py is fine -- check the Actions tab.
   schedule:
     - cron: "0 9 * * 1"
 
@@ -18,6 +22,7 @@ env:
 
 jobs:
   lint:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -33,6 +38,7 @@ jobs:
         run: uv run ty check
 
   test:
+    if: github.event_name != 'schedule'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
