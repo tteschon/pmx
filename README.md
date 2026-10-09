@@ -280,6 +280,12 @@ CI runs the same checks on every push and pull request, across Python
 3.11-3.14 on Linux plus one macOS job. Graphviz is installed there because
 three tests render real images and would fail without it.
 
+Those jobs use the pm4py pinned in `uv.lock`, but `uv tool install` ignores
+the lock and installs the newest pm4py. A separate `pm4py-latest` job tests
+that version on every push and pull request, and weekly on its own; a failed
+weekly run opens an issue. Deprecation and future warnings fail the test
+suite, locally too, so a pm4py call on its way out shows up before it breaks.
+
 ## Dashboard
 
 `dashboard/index.html` is a self-contained page that reads the JSON from
