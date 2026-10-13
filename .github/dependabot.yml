@@ -1,0 +1,29 @@
+version: 2
+
+updates:
+  # lockfile-only: bumps move uv.lock and leave the >= floors in
+  # pyproject.toml alone. Users get whatever their resolver picks above the
+  # floor, so the floor is the claim worth keeping honest -- the
+  # lowest-direct job in ci.yml tests it, and the pinned jobs test the lock.
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    versioning-strategy: lockfile-only
+    groups:
+      # One PR for the dev tools, so a week of ruff/ty/pytest releases is a
+      # single review. pm4py, rich and typer stay ungrouped: a runtime bump
+      # should fail CI on its own, not hide in a batch.
+      dev-tools:
+        patterns:
+          - pytest
+          - pytest-cov
+          - ruff
+          - ty
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday

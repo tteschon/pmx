@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   pm4py call that is going away surfaces while it still works.
 - The CI smoke test parses `pmx inspect --json` output, catching anything
   that writes to stdout outside the test runner's capture.
+- Dependabot keeps `uv.lock` and the GitHub Actions versions current. It
+  bumps the lock only; the `>=` floors in `pyproject.toml` stay put, and a
+  new `lowest-direct` CI job tests every direct dependency at its floor on
+  Python 3.11.
 
 ## [0.2.0] - 2026-09-28
 
