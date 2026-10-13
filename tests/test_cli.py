@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 from typer.testing import CliRunner
 
-from pmx import __version__
+from pmx import __version__, cli
 from pmx.cli import app
 
 runner = CliRunner()
@@ -413,3 +415,50 @@ def test_inspect_json_keeps_its_existing_shape(xes_log: Path) -> None:
         "top_variants",
     } <= set(payload)
     assert isinstance(payload["top_variants"], dict)
+
+
+class _Relaunched(Exception):
+    """Stands in for os.execve, which would replace the test process."""
+
+
+def _capture_execve(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    calls: dict[str, Any] = {}
+
+    def fake_execve(path: str, argv: list[str], env: dict[str, str]) -> None:
+        calls.update(path=path, argv=argv, env=env)
+        raise _Relaunched
+
+    monkeypatch.setattr(cli.os, "execve", fake_execve)
+    return calls
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="Windows re-launches via subprocess"
+)
+def test_main_pins_the_hash_seed_by_relaunching(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With a noise threshold, pm4py's result depends on the hash seed."""
+    monkeypatch.delenv("PYTHONHASHSEED", raising=False)
+    calls = _capture_execve(monkeypatch)
+
+    with pytest.raises(_Relaunched):
+        cli.main()
+
+    assert calls["path"] == sys.executable
+    # Re-invoked exactly as Python was, so argv[0] -- and the prog name -- hold.
+    assert calls["argv"] == [sys.executable, *sys.orig_argv[1:]]
+    assert calls["env"]["PYTHONHASHSEED"] == cli.HASH_SEED
+
+
+@pytest.mark.parametrize("seed", ["0", "11", "random"])
+def test_main_leaves_a_user_seed_alone(
+    monkeypatch: pytest.MonkeyPatch, seed: str
+) -> None:
+    monkeypatch.setenv("PYTHONHASHSEED", seed)
+    calls = _capture_execve(monkeypatch)
+    monkeypatch.setattr(cli, "app", lambda: None)
+
+    cli.main()
+
+    assert calls == {}

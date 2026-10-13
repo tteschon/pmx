@@ -70,10 +70,24 @@ jobs:
 
       - run: uv sync --locked --python ${{ matrix.python }}
 
+      # The golden tests in tests/test_sample_logs.py need pm4py's sample
+      # logs, which are gitignored. The cache key is the fetch script, which
+      # pins the pm4py commit and every file's SHA-256, so changing a pin
+      # invalidates it -- and the script re-verifies whatever the cache
+      # restores. PMX_REQUIRE_SAMPLE_LOGS turns a missing log into a failure
+      # instead of a skip.
+      - uses: actions/cache@v6
+        with:
+          path: examples/data
+          key: sample-logs-${{ hashFiles('examples/fetch-sample-logs.sh') }}
+      - run: examples/fetch-sample-logs.sh
+
       # Coverage is measured on one leg only -- instrumenting all five costs
       # time and tells you the same thing. Reported, not gated: there is no
       # --cov-fail-under, so a dip is visible without blocking a merge.
       - name: pytest
+        env:
+          PMX_REQUIRE_SAMPLE_LOGS: "1"
         run: |
           if [ "${{ matrix.os }}-${{ matrix.python }}" = "ubuntu-latest-3.14" ]; then
             uv run pytest -q --cov --cov-report=term-missing
@@ -138,7 +152,17 @@ jobs:
       - run: uv sync --upgrade-package pm4py
       - name: pm4py version
         run: uv run python -c "import pm4py; print(pm4py.__version__)" 2>/dev/null
+
+      # The golden tests matter most here: a pm4py release that changes what
+      # a miner produces shows up as a documented figure going wrong.
+      - uses: actions/cache@v6
+        with:
+          path: examples/data
+          key: sample-logs-${{ hashFiles('examples/fetch-sample-logs.sh') }}
+      - run: examples/fetch-sample-logs.sh
       - run: uv run pytest -q
+        env:
+          PMX_REQUIRE_SAMPLE_LOGS: "1"
 
       # Only the weekly run files an issue; a PR's failure already shows on
       # the PR. One open issue at a time -- later failures comment on it.

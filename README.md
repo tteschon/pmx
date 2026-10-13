@@ -60,7 +60,7 @@ well -- see [CSV input](#csv-input).
 | `running-example.xes` | 6 | 42 | The canonical pm4py teaching log. Start here. |
 | `running-example.csv` | 6 | 42 | Same log, CSV -- already uses XES column names. |
 | `receipt.xes` | 1,434 | 8,577 | A real Dutch municipality permit process. |
-| `roadtraffic100traces.xes` | 100 | 566 | Road-fine collection. |
+| `roadtraffic100traces.xes` | 100 | 390 | Road-fine collection. |
 | `helpdesk.xes.gz` | 4,580 | 21,348 | Gzipped, to exercise that path. |
 
 ## Usage
@@ -124,11 +124,18 @@ the classic baseline and has no tuning knobs.
 | `alpha` | none | `petri` |
 
 Raising `--noise-threshold` filters infrequent behaviour from inside the miner.
-On `receipt.xes` it takes the model from 74 transitions to 66:
+On `receipt.xes` it takes the model from 74 transitions to 69 at 0.2 -- and
+the count does not fall steadily as you raise it: 0.3 gives 42, 0.4 gives 57.
 
 ```bash
 pmx discover examples/data/receipt.xes --noise-threshold 0.2 -o simpler.pnml
 ```
+
+With a noise threshold, pm4py's result depends on Python's hash seed, which
+changes every run -- about one run in four would give 66 instead of 69. pmx
+pins `PYTHONHASHSEED=0` so the same command gives the same model. Set it
+yourself to override; calling `pmx.discovery` from your own Python code uses
+your interpreter's seed.
 
 ### Making an unreadable model readable
 
@@ -151,7 +158,7 @@ diagram you can actually read:
 | Filter | Transitions | Cases kept |
 |---|---|---|
 | none | 74 | 100% |
-| `--noise-threshold 0.2` | 66 | 100% |
+| `--noise-threshold 0.2` | 69 | 100% |
 | `--top-variants 10` | 14 | 87.9% |
 | `--top-variants 5` | 9 | 79.6% |
 
@@ -285,6 +292,12 @@ the lock and installs the newest pm4py. A separate `pm4py-latest` job tests
 that version on every push and pull request, and weekly on its own; a failed
 weekly run opens an issue. Deprecation and future warnings fail the test
 suite, locally too, so a pm4py call on its way out shows up before it breaks.
+
+`tests/test_sample_logs.py` pins every figure these docs quote for the sample
+logs, so a pm4py release that changes a miner's output -- or a figure that was
+simply wrong -- fails a test rather than drifting. They skip until you run
+`examples/fetch-sample-logs.sh`; CI fetches the logs and sets
+`PMX_REQUIRE_SAMPLE_LOGS=1`, which turns a missing log into a failure.
 
 ## Dashboard
 

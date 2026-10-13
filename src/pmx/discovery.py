@@ -64,6 +64,10 @@ def discover(
     behaviour; higher values filter infrequent paths). `dependency_threshold`
     applies to the heuristics miner. Both are ignored by the alpha miner,
     which has no tuning knobs.
+
+    With a noise threshold the result depends on Python's hash seed (see
+    `pmx.cli.HASH_SEED`): set PYTHONHASHSEED for reproducible models. The
+    CLI does this itself.
     """
     import pm4py
 

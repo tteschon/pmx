@@ -17,6 +17,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   pm4py call that is going away surfaces while it still works.
 - The CI smoke test parses `pmx inspect --json` output, catching anything
   that writes to stdout outside the test runner's capture.
+- Golden tests pin every figure the docs quote for pm4py's sample logs. CI
+  fetches the logs and fails, not skips, if they are missing.
+- `examples/fetch-sample-logs.sh` downloads from a pinned pm4py commit and
+  checks each file's SHA-256, re-fetching a copy on disk that does not match.
+
+### Fixed
+
+- `pmx discover --noise-threshold` could return a different model from one
+  run to the next: pm4py's noise-filtering inductive miner depends on
+  Python's per-process hash seed, and about one run in four differed (66
+  transitions instead of 69 on `receipt.xes` at 0.2). The CLI now re-launches
+  with `PYTHONHASHSEED=0` unless you set it yourself. Results without a noise
+  threshold, and with `--top-variants`, were already stable.
+- The docs quoted 66 as where `--noise-threshold` bottoms out on
+  `receipt.xes`. With the seed pinned it gives 69 at 0.2, 42 at 0.3 and 57 at
+  0.4 -- uneven, but well below 66.
+- `roadtraffic100traces.xes` has 390 events, not 566 as the README said.
 
 ## [0.2.0] - 2026-09-28
 

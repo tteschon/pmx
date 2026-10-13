@@ -95,7 +95,7 @@ readable.
    effective than `--noise-threshold`, which cannot remove concurrency. Use the
    concentration line from step 1 to pick N. On `receipt.xes`,
    `--top-variants 10` takes the model from 74 transitions to 14 while still
-   covering 88% of cases, where `--noise-threshold` only reaches 66.
+   covering 88% of cases, where `--noise-threshold 0.2` still leaves 69.
 
    **Always tell the user a model was filtered, and to what coverage.** pmx
    prints this on stderr; pass it on. A filtered model is a claim about

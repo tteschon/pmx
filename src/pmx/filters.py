@@ -2,9 +2,9 @@
 
 `--noise-threshold` is the inductive miner's own complexity knob, but it works
 *inside* the miner and cannot remove concurrency. On a log whose variants are
-mostly re-orderings of the same activities it barely helps: pm4py's
-`receipt.xes` goes from 74 transitions to 66 across the whole 0.0-0.6 range,
-and the diagram stays unreadable.
+mostly re-orderings of the same activities it helps erratically: pm4py's
+`receipt.xes` goes from 74 transitions to 69 at 0.2, 42 at 0.3 and back up to
+57 at 0.4, and the diagram stays unreadable throughout.
 
 Dropping rare variants from the log before mining is the blunter, more
 effective tool -- the same log falls to 14 transitions at the top 10 variants,
