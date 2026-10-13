@@ -127,6 +127,32 @@ jobs:
             -o "${RUNNER_TEMP}/model.pnml" -i "${RUNNER_TEMP}/model.png"
           test -s "${RUNNER_TEMP}/model.png"  # proves Graphviz really works
 
+  # Dependabot bumps uv.lock but not the >= floors in pyproject.toml, so the
+  # pinned jobs drift above what pmx claims to support. This job installs
+  # every direct dependency at its floor, on the oldest Python in
+  # requires-python, so the floors stay true.
+  #
+  # UV_RESOLUTION is job-wide, not a flag on `uv sync`: uv.lock records the
+  # resolution mode, and a plain `uv run` re-resolves to the newest versions
+  # -- quietly testing the wrong thing.
+  lowest-direct:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    env:
+      UV_RESOLUTION: lowest-direct
+      UV_PYTHON: "3.11"
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Graphviz
+        run: sudo apt-get update && sudo apt-get install -y graphviz
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - run: uv sync
+      - name: Versions under test
+        run: uv pip list 2>/dev/null | grep -iE '^(pm4py|rich|typer) '
+      - run: uv run pytest -q
+
   # The `test` job runs the pm4py pinned in uv.lock, but `uv tool install`
   # ignores the lock and resolves the newest pm4py -- which is what users
   # actually run. This job tests that version. pm4py ships behaviour changes

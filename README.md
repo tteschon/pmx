@@ -293,6 +293,17 @@ that version on every push and pull request, and weekly on its own; a failed
 weekly run opens an issue. Deprecation and future warnings fail the test
 suite, locally too, so a pm4py call on its way out shows up before it breaks.
 
+Dependabot bumps `uv.lock` weekly but never the `>=` floors in
+`pyproject.toml`. A `lowest-direct` job installs each direct dependency at
+its floor on Python 3.11, so the versions pmx claims to support stay tested
+as the lock moves away from them. To reproduce it locally:
+
+```bash
+UV_RESOLUTION=lowest-direct UV_PYTHON=3.11 uv run pytest
+```
+
+That re-resolves `uv.lock`; `git checkout uv.lock` afterwards.
+
 `tests/test_sample_logs.py` pins every figure these docs quote for the sample
 logs, so a pm4py release that changes a miner's output -- or a figure that was
 simply wrong -- fails a test rather than drifting. They skip until you run
