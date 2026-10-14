@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   fetches the logs and fails, not skips, if they are missing.
 - `examples/fetch-sample-logs.sh` downloads from a pinned pm4py commit and
   checks each file's SHA-256, re-fetching a copy on disk that does not match.
+- The release workflow builds without the uv cache, so a poisoned cache entry
+  cannot end up in a package published to PyPI.
 
 ### Fixed
 
