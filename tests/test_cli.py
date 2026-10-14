@@ -398,7 +398,8 @@ def test_inspect_json_carries_the_new_statistics(wide_log: Path) -> None:
 
 
 def test_inspect_json_keeps_its_existing_shape(xes_log: Path) -> None:
-    """The dashboard reads these keys; adding fields must not rename any."""
+    """`--json` is what scripts and the agent skill parse: adding fields is
+    fine, renaming or dropping one is not."""
     payload = json.loads(runner.invoke(app, ["inspect", str(xes_log), "--json"]).stdout)
 
     assert {

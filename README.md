@@ -310,49 +310,6 @@ simply wrong -- fails a test rather than drifting. They skip until you run
 `examples/fetch-sample-logs.sh`; CI fetches the logs and sets
 `PMX_REQUIRE_SAMPLE_LOGS=1`, which turns a missing log into a failure.
 
-## Dashboard
-
-`dashboard/index.html` is a self-contained page that reads the JSON from
-`pmx inspect --json` — no build step, no server, no network.
-
-```bash
-pmx inspect examples/data/receipt.xes --json -n 25 | pbcopy
-```
-
-Open the page, hit **Load your own**, paste. It ships with four of pm4py's
-logs already embedded so it is useful before you point it at anything.
-
-The hero is variant coverage: how few distinct paths account for most of your
-cases, and how long the tail is behind them. Everything is computed in the
-browser, so a log you cannot upload anywhere is still fine to look at.
-
-Two panels take extra input:
-
-- **The mined model** shows the BPMN that `discover` mined from whichever log is
-  selected — all four sample logs ship with theirs, so it is populated on open.
-  To see your own, paste the SVG from `discover -i`; **Remove** drops the paste
-  and falls back to the bundled one.
-
-  ```bash
-  pmx discover YOUR_LOG.xes --notation bpmn -o m.bpmn -i m.svg --bgcolor transparent
-  ```
-
-  `--bgcolor transparent` is what lets it sit on either theme: the page strips
-  the Graphviz background and remaps its black ink to follow your theme, while
-  leaving frequency-shaded nodes and their labels readable on their own fill.
-
-- **Transitions** shows exact directly-follows counts. The same paste box takes
-  either payload — it tells `inspect` and `dfg` output apart by shape.
-
-  ```bash
-  pmx dfg YOUR_LOG.xes --json | pbcopy
-  ```
-
-Pasted SVG is sanitised before it touches the DOM: scripts, event handlers,
-`foreignObject`, and external references are stripped. The published artifact's
-CSP would block inline script anyway, but the file also opens straight from
-disk, where it would not.
-
 ## Licensing
 
 pmx is **AGPL-3.0-or-later**. Full text in

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Removed
+
+- The `dashboard/` web page. pmx is a command-line tool; the dashboard
+  queried Salesforce directly from the browser and no longer used pmx or
+  pm4py at all. It never shipped in the installed package. The last version
+  is in the repository history: `git show v0.2.1:dashboard/index.html`.
+
 ## [0.2.1] - 2026-10-13
 
 Makes `pmx discover --noise-threshold` reproducible. That is the only change
