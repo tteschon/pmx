@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   queried Salesforce directly from the browser and no longer used pmx or
   pm4py at all. It never shipped in the installed package. The last version
   is in the repository history: `git show v0.2.1:dashboard/index.html`.
+- The `skills/` agent skill. It moved to
+  [tteschon/skills](https://github.com/tteschon/skills) as the
+  `process-mining` plugin, with its install instructions updated for the
+  `pmx-cli` PyPI package. The copy as of 0.2.1 is at
+  `git show v0.2.1:skills/pmx-process-mining/SKILL.md`.
 
 ## [0.2.1] - 2026-10-13
 

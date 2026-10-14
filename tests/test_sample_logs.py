@@ -1,11 +1,15 @@
 """Golden tests: pin every figure the docs quote for pm4py's sample logs.
 
-README.md, CHANGELOG.md and the skill docs make concrete claims -- "74
+README.md, CHANGELOG.md and the agent skill make concrete claims -- "74
 transitions to 14", "87.9% of cases" -- about the logs that
 `examples/fetch-sample-logs.sh` downloads. Nothing else checks those claims,
 and they drift silently: when a pm4py release changes what a miner produces,
 or when a figure was simply wrong. Each test here names where its numbers are
 quoted, so a failure says which sentence to fix.
+
+SKILL.md and references/*.md are the pmx-process-mining skill, which lives in
+tteschon/skills (plugins/process-mining), not here. pmx CI cannot see it, so
+when a figure in this file changes, edit the skill to match.
 
 The logs are gitignored, so these skip on a fresh clone. CI fetches them and
 sets PMX_REQUIRE_SAMPLE_LOGS=1, which turns a missing log into a failure --
