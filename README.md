@@ -240,22 +240,14 @@ mapping wrong and the error lists the columns the file actually has.
 
 ## Agent skill
 
-`skills/pmx-process-mining/` wraps this CLI as an
-[Agent Skill](https://agentskills.io/specification), so an agent can drive it
-without being told the flags each time. It lives in the repository rather than
-the installed package, so this needs a clone:
+An [Agent Skill](https://agentskills.io/specification) that drives this CLI --
+so an agent profiles before it mines, renders the model, and says when a model
+was filtered -- lives in [tteschon/skills](https://github.com/tteschon/skills)
+as the `process-mining` plugin. In Claude Code:
 
-```bash
-mkdir -p ~/.claude/skills
-ln -sfn "$PWD/skills/pmx-process-mining" ~/.claude/skills/pmx-process-mining
 ```
-
-Symlinked rather than copied, so edits to the skill track the CLI it documents.
-Validate after changing it:
-
-```bash
-uvx --from "git+https://github.com/agentskills/agentskills#subdirectory=skills-ref" \
-  skills-ref validate ./skills/pmx-process-mining
+/plugin marketplace add tteschon/skills
+/plugin install process-mining@tteschon-agent-skills
 ```
 
 ## Development
