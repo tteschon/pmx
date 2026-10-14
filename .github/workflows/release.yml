@@ -30,9 +30,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # No uv cache: this job builds what gets published to PyPI, and a tag
+      # run can restore caches written on main. A poisoned cache entry would
+      # end up inside the release, which a PyPI version cannot take back.
+      # The cost is a slower build, a few times a year.
       - uses: astral-sh/setup-uv@v10.3.0
         with:
-          enable-cache: true
+          enable-cache: false
 
       # The classic release bug: tag v0.2.0 pushed against a pyproject still
       # saying 0.1.0, uploading a version nobody can find by tag. Fail here,
