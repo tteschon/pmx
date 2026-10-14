@@ -959,7 +959,7 @@ wheels = [
 
 [[package]]
 name = "pm4py"
-version = "2.7.23.3"
+version = "2.7.23.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cvxopt", marker = "python_full_version < '3.15'" },
@@ -973,13 +973,11 @@ dependencies = [
     { name = "pytz" },
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "scipy", version = "1.18.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "setuptools" },
     { name = "tqdm" },
-    { name = "wheel" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5e/b1/3702af40b3ca898637effdcec0544d66442c6c929ee575dcb3a622c96787/pm4py-2.7.23.3.tar.gz", hash = "sha256:d2c0a335bd497d78ef7a338b161e03dc8ec0e02abca56223e4d60bfe8d747dc9", size = 1169624, upload-time = "2026-07-17T12:14:20.645Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a3/19/fceef81e71d01e908fa4544b92efcf6c55245eb5a01a46849e5ad211eca9/pm4py-2.7.23.9.tar.gz", hash = "sha256:4215d570a3a1aa75cabfdb146cbc59a5c6d768b38f7f407d60f45e1ff561ffc2", size = 1188296, upload-time = "2026-10-09T06:36:01.018Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d7/a7/894944d7e296a0e7e7a2039a21471def58cd3a2d30b790e388054452519a/pm4py-2.7.23.3-py3-none-any.whl", hash = "sha256:4901c145229f2624e0dad305975696d81d71c8173ffde633964c87822206f8fc", size = 2651188, upload-time = "2026-07-17T12:14:14.774Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/dd/190673ad5360353a93aa634feb214707e1d77030bae06adbb71579e2f8cf/pm4py-2.7.23.9-py3-none-any.whl", hash = "sha256:dba8f49464e57402a85ef20024e828bcef64fc7f4fa5516365001781b751085e", size = 2669360, upload-time = "2026-10-09T06:35:58.273Z" },
 ]
 
 [[package]]
@@ -1258,15 +1256,6 @@ wheels = [
 ]
 
 [[package]]
-name = "setuptools"
-version = "83.0.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/34/26/f5d29e25ffdb535afef2d35cdb55b325298f96debd670da4c325e08d70f4/setuptools-83.0.0.tar.gz", hash = "sha256:025bccbbf0fa05b6192bc64ae1e7b16e001fd6d6d4d5de03c97b1c1ade523bef", size = 1154254, upload-time = "2026-07-04T15:31:22.699Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/5d/40/e1e72872c6354b306daef1703549e8e83b4d43cfea356311bf722a043752/setuptools-83.0.0-py3-none-any.whl", hash = "sha256:29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3", size = 1008090, upload-time = "2026-07-04T15:31:20.885Z" },
-]
-
-[[package]]
 name = "shellingham"
 version = "1.5.4"
 source = { registry = "https://pypi.org/simple" }
@@ -1397,16 +1386,4 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/92/ff/5a28bdfd8c3ebec42564ac7d0e54ca3db65044a9314a97f9564fa7a1e926/tzdata-2026.3.tar.gz", hash = "sha256:4a1518b8993086a7982523e071643f3c0e5f213e75b21318e78bcabfff9d1415", size = 198674, upload-time = "2026-07-10T08:50:37.887Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e5/6d/b53b99a9f2766d095985947a5782f1702cabb129a34f7a802d7197af832f/tzdata-2026.3-py2.py3-none-any.whl", hash = "sha256:dc096730c87af6cab1b171c9d532be840741ff5d459015e7f6947bd7d7e54931", size = 348168, upload-time = "2026-07-10T08:50:36.46Z" },
-]
-
-[[package]]
-name = "wheel"
-version = "0.47.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "packaging" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/39/62/75f18a0f03b4219c456652c7780e4d749b929eb605c098ce3a5b6b6bc081/wheel-0.47.0.tar.gz", hash = "sha256:cc72bd1009ba0cf63922e28f94d9d83b920aa2bb28f798a31d0691b02fa3c9b3", size = 63854, upload-time = "2026-04-22T15:51:27.727Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/87/1b/9e33c09813d65e248f7f773119148a612516a4bea93e9c6f545f78455b7c/wheel-0.47.0-py3-none-any.whl", hash = "sha256:212281cab4dff978f6cedd499cd893e1f620791ca6ff7107cf270781e587eced", size = 32218, upload-time = "2026-04-22T15:51:26.296Z" },
 ]
