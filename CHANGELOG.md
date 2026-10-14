@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-13
+
+Makes `pmx discover --noise-threshold` reproducible. That is the only change
+to how the installed package behaves; everything else here is CI, tests and
+documentation.
+
 ### Changed
 
 - CI now also tests against the newest pm4py, not just the version pinned in
@@ -90,5 +96,6 @@ First public release.
   which is AGPL v3. See the Licensing section of the README before
   distributing this or putting it behind a network service.
 
-[Unreleased]: https://github.com/tteschon/pmx/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/tteschon/pmx/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/tteschon/pmx/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/tteschon/pmx/releases/tag/v0.2.0
