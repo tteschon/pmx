@@ -68,7 +68,7 @@ pmx discover receipt.xes --top-variants 10 -o model.bpmn --notation bpmn -i mode
 | Filter | Transitions | Cases kept |
 |---|---|---|
 | none | 74 | 100% |
-| `--noise-threshold 0.2` | 66 | 100% |
+| `--noise-threshold 0.2` | 69 | 100% |
 | `--top-variants 10` | 14 | 87.9% |
 | `--top-variants 5` | 9 | 79.6% |
 
@@ -76,8 +76,9 @@ Start from `variants_for_80pct` in the `inspect` profile. `--min-coverage 0.8`
 does the same thing expressed as a share of cases rather than a count.
 
 **`--noise-threshold` (secondary.)** It filters infrequent behaviour inside the
-inductive miner. The effect is real but gradual -- 74 transitions to 66 across
-the whole usable range on `receipt.xes` -- and it cannot touch concurrency, so
+inductive miner. The effect is real but erratic -- on `receipt.xes`, 74
+transitions become 69 at 0.2, 42 at 0.3 and 57 at 0.4, so a higher threshold
+does not reliably mean a smaller model -- and it cannot touch concurrency, so
 on a log with a high `variants`-to-`distinct_activity_sets` ratio it will
 disappoint. Values above ~0.5 discard so much that the model stops describing
 the log.

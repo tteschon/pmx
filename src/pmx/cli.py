@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -720,5 +723,33 @@ def _duration(seconds: float | None) -> str:
     return " ".join(parts) or "0s"
 
 
+# With a noise threshold, pm4py's inductive miner returns a model that depends
+# on Python's per-process hash seed: on receipt.xes, `--noise-threshold 0.2`
+# gives 69 transitions in most runs and 66 in about one in four. Without one,
+# and with --top-variants, results were identical across 60 seeds. The same command should give the same model, so
+# main() re-launches with a fixed seed. Importing this module loads neither
+# pm4py nor pandas, so the re-launch costs little.
+#
+# A seed the user sets is left alone, including `random`. Hash randomisation
+# defends servers against crafted keys; a CLI reading local files gives nothing
+# up by pinning it. Library callers of pmx.discovery keep their own seed.
+HASH_SEED = "0"
+
+
+def _pin_hash_seed() -> None:
+    if "PYTHONHASHSEED" in os.environ:
+        return
+    env = {**os.environ, "PYTHONHASHSEED": HASH_SEED}
+    # orig_argv is how Python was really invoked -- the console script path or
+    # `-m pmx` -- so the re-launch keeps its argv[0] and Typer still calls
+    # itself `pmx` in usage messages.
+    argv = [sys.executable, *sys.orig_argv[1:]]
+    if os.name == "nt":
+        # os.exec* on Windows spawns and returns, detaching the console.
+        raise SystemExit(subprocess.call(argv, env=env))
+    os.execve(sys.executable, argv, env)
+
+
 def main() -> None:
+    _pin_hash_seed()
     app()

@@ -83,29 +83,6 @@ def test_case_durations(wide_log: Path) -> None:
     assert summary.mean_case_duration_seconds == pytest.approx(51480.0)
 
 
-RECEIPT = Path(__file__).resolve().parents[1] / "examples" / "data" / "receipt.xes"
-
-
-@pytest.mark.skipif(
-    not RECEIPT.exists(), reason="run examples/fetch-sample-logs.sh to enable"
-)
-def test_receipt_log_statistics() -> None:
-    """Pin the numbers the README and skill docs quote for the sample log.
-
-    `examples/data/` is gitignored, so this is skipped rather than failing on a
-    fresh clone -- but where the data is present it stops the documented
-    figures drifting silently.
-    """
-    summary = summarize(read_log(RECEIPT))
-
-    assert (summary.cases, summary.events, summary.variants) == (1434, 8577, 116)
-    assert summary.variants_for_50pct == 2
-    assert summary.variants_for_80pct == 6
-    assert summary.variants_for_95pct == 45
-    assert summary.singleton_variants == 86
-    assert summary.distinct_activity_sets == 50
-
-
 def test_single_event_cases_have_zero_duration(tmp_path: Path) -> None:
     """A case with one event lasted no time -- that is 0.0, not unknown."""
     path = tmp_path / "single.csv"
