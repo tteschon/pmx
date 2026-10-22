@@ -964,7 +964,7 @@ wheels = [
 
 [[package]]
 name = "pm4py"
-version = "2.7.23.9"
+version = "2.7.23.11"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cvxopt", marker = "python_full_version < '3.15'" },
@@ -980,9 +980,9 @@ dependencies = [
     { name = "scipy", version = "1.18.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a3/19/fceef81e71d01e908fa4544b92efcf6c55245eb5a01a46849e5ad211eca9/pm4py-2.7.23.9.tar.gz", hash = "sha256:4215d570a3a1aa75cabfdb146cbc59a5c6d768b38f7f407d60f45e1ff561ffc2", size = 1188296, upload-time = "2026-10-09T06:36:01.018Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ba/80/fb508055900048c6210bfbb80c67d67d5df16564df243edd901a709e4d23/pm4py-2.7.23.11.tar.gz", hash = "sha256:daf30bb678aea4d716e1adf93bc7b91f762aea79dcf73be5553708776ad351df", size = 1189561, upload-time = "2026-10-15T11:04:11.622Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2c/dd/190673ad5360353a93aa634feb214707e1d77030bae06adbb71579e2f8cf/pm4py-2.7.23.9-py3-none-any.whl", hash = "sha256:dba8f49464e57402a85ef20024e828bcef64fc7f4fa5516365001781b751085e", size = 2669360, upload-time = "2026-10-09T06:35:58.273Z" },
+    { url = "https://files.pythonhosted.org/packages/20/66/ce324bebe4dc63538ecff0f4ed118d942e8bea8148dadb76bb551b48346f/pm4py-2.7.23.11-py3-none-any.whl", hash = "sha256:9b7fa53d5ab352b116d10dc9d9033239785be9ada420a8ff9d7da5fa85bad3c8", size = 2670932, upload-time = "2026-10-15T11:04:05.938Z" },
 ]
 
 [[package]]
