@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.0
+      - uses: astral-sh/setup-uv@v10.3.2
         with:
           enable-cache: true
       - run: uv sync --locked
@@ -64,7 +64,7 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install graphviz
 
-      - uses: astral-sh/setup-uv@v10.3.0
+      - uses: astral-sh/setup-uv@v10.3.2
         with:
           enable-cache: true
 
@@ -145,7 +145,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Install Graphviz
         run: sudo apt-get update && sudo apt-get install -y graphviz
-      - uses: astral-sh/setup-uv@v10.3.0
+      - uses: astral-sh/setup-uv@v10.3.2
         with:
           enable-cache: true
       - run: uv sync
@@ -169,7 +169,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Install Graphviz
         run: sudo apt-get update && sudo apt-get install -y graphviz
-      - uses: astral-sh/setup-uv@v10.3.0
+      - uses: astral-sh/setup-uv@v10.3.2
         with:
           enable-cache: true
 

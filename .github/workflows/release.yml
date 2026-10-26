@@ -34,7 +34,7 @@ jobs:
       # run can restore caches written on main. A poisoned cache entry would
       # end up inside the release, which a PyPI version cannot take back.
       # The cost is a slower build, a few times a year.
-      - uses: astral-sh/setup-uv@v10.3.0
+      - uses: astral-sh/setup-uv@v10.3.2
         with:
           enable-cache: false
 
