@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -964,7 +964,7 @@ wheels = [
 
 [[package]]
 name = "pm4py"
-version = "2.7.23.11"
+version = "2.7.23.12"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cvxopt", marker = "python_full_version < '3.15'" },
@@ -980,9 +980,9 @@ dependencies = [
     { name = "scipy", version = "1.18.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ba/80/fb508055900048c6210bfbb80c67d67d5df16564df243edd901a709e4d23/pm4py-2.7.23.11.tar.gz", hash = "sha256:daf30bb678aea4d716e1adf93bc7b91f762aea79dcf73be5553708776ad351df", size = 1189561, upload-time = "2026-10-15T11:04:11.622Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d5/19/375a3ee78e5a705fa1fd2d85b4dcf02636574db5c7419cc3ec1b23541628/pm4py-2.7.23.12.tar.gz", hash = "sha256:65964e84d9b0ce31e9644eaff3ba31b56b7449f2a90d590b85010946b9d7bfa8", size = 1189080, upload-time = "2026-11-05T05:38:22.608Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/20/66/ce324bebe4dc63538ecff0f4ed118d942e8bea8148dadb76bb551b48346f/pm4py-2.7.23.11-py3-none-any.whl", hash = "sha256:9b7fa53d5ab352b116d10dc9d9033239785be9ada420a8ff9d7da5fa85bad3c8", size = 2670932, upload-time = "2026-10-15T11:04:05.938Z" },
+    { url = "https://files.pythonhosted.org/packages/0b/f9/3d660092fcc8e4b9732a7ddf1962080bd2f4ba0e5039d68b3da63b28bfb9/pm4py-2.7.23.12-py3-none-any.whl", hash = "sha256:57fd1baa88cad99f39d2e2b145eefc64d454732a6b2ce07c38841fd800c810bf", size = 2670679, upload-time = "2026-11-05T05:38:15.219Z" },
 ]
 
 [[package]]
